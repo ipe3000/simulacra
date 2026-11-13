@@ -214,3 +214,23 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .title-menu small { color: #c2b39a; }
 .title-menu-aside { grid-column: 2; grid-row: 1 / span 2; color: var(--gold); }
 #match-header { flex-wrap: wrap; }
+.computer-setup {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 360px);
+}
+.computer-setup h2 { margin: 0; }
+.computer-setup label, #spectator-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.computer-setup label { justify-content: space-between; }
+.computer-setup select, #spectator-controls select {
+  font: inherit;
+  color: #efeadc;
+  background: #231d18;
+  border: 1px solid #7e694b;
+  padding: 6px;
+}

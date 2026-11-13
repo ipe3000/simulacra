@@ -1,6 +1,8 @@
 # Simulacra
 
-Prototipo desktop di Simulacra, gioco di Matteo Perlini. Due persone giocano a turno nello stesso browser. L’indicatore di turno e la mano si aggiornano automaticamente quando cambia chi deve decidere.
+Prototipo desktop di Simulacra, gioco di Matteo Perlini. Il menu permette di giocare in due sullo stesso dispositivo, affrontare il computer oppure osservare due computer.
+
+In Giocatore vs Computer scegli il tuo Arcimago e la difficoltà dell’avversario. In Computer vs Computer puoi assegnare una difficoltà a ogni Arcimago, mettere in pausa la partita, avanzare di una decisione e regolare la velocità. I tre livelli usano la propria mano, le informazioni pubbliche e le carte rivelate dagli effetti di gioco. Il livello Facile varia di più le sue scelte, il Normale valuta anche Condizioni ed esposizione, il Difficile valuta anche attacchi dopo un movimento e possibili risposte avversarie.
 
 Il prototipo usa la configurazione illustrata nel regolamento 5.1 e il catalogo di 70 carte, oltre a Colpo Arcano. Ogni Arcimago pesca sei carte da un grimorio casuale di 30 carte, composto da 4 Reazioni, 8 Attacchi e 18 Utilità. Il catalogo è in catalogo-carte.json. Ricaricare la pagina avvia una nuova partita.
 

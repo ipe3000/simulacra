@@ -1,5 +1,6 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 import catalog from './catalogo-carte.json' with {type:'json'};
+import {chooseComputerAction} from './computer.mjs';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -93,6 +94,11 @@ function shuffle(deck){
 }
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
+let controllers=[null,null], matchMode='local', botTimer, paused=true, botStopped=false;
+const spectatorControls=document.querySelector('#spectator-controls');
+const toggleComputers=document.querySelector('#toggle-computers');
+const stepComputers=document.querySelector('#step-computers');
+const computerSpeed=document.querySelector('#computer-speed');
 let units,teams,order,index,round,setup,viewer,phase,mode,barriers,log,winner,ritualReady,pending,choice;
 const active=()=>units[order[index]];
 const at=c=>units.find(u=>u.cell===c);
@@ -110,6 +116,8 @@ const cellCreations=['cube','ballista'];
 const free=c=>!at(c)&&!creations.some(v=>v.cell===c);
 
 function start(){
+  clearTimeout(botTimer);
+  paused=true;botStopped=false;
   borrowed=[];
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
   teams=[0,1].map(()=>{
@@ -196,8 +204,8 @@ function passable(u,a,b){
   if(wallBetween(a,b)&&!creations.some(v=>v.id==='portal'&&same(e,v.edge)))return false;
   return !(barriers[1-u.side]&&same(e,barriers[1-u.side]));
 }
-function legalCells(){
-  const u=active();
+function legalCells(selection=mode,u=active()){
+  const mode=selection;
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
   if(phase==='spawn')return respawn(zones[u.side],free);
   if(phase==='dash')return [...near(choice.unit,3).keys()].filter(c=>!at(c));
@@ -227,7 +235,8 @@ function legalCells(){
     && inRange(u,v,cards[mode][2])).map(v=>v.cell);
   return [];
 }
-function targets(){
+function targets(selection=mode){
+  const mode=selection;
   const u=active();
   if(phase!=='action'||(cards[mode]&&effectiveRange(u,cards[mode][2])==='Vista'&&has(u,'Accecato')))return [];
   if(mode==='dissolve')return [...barriers,...creations.map(v=>v.edge)].filter(e=>e&&edgeSight(u,e));
@@ -353,6 +362,7 @@ function moveEffect(u,positions,done=resume,optional=true,side=active().side){
   if(!positions.length){done();return;}
   const select=()=>{
     choose('Sposta '+name(u),optional?[['Salta',done]]:[],side,positions);
+    choice.moving=u;
     choice.apply=c=>traverse(u,near(u,Infinity).get(c).route,()=>{
       if(phase==='end'){choice=null;render();}else done();
     });
@@ -366,13 +376,14 @@ function chooseDiscard(side,n,done){
   choose('Scegli una carta da scartare',orderedHand(hand).map(({label,i})=>[label,()=>{
     discard(side,i);chooseDiscard(side,n-1,done);
   }]),side);
+  choice.intent='discard';
 }
 function affordable(u,cost){const t=teams[u.side];return cost<=u.pe+Math.min(t.reserve,2-t.spent);}
 function pay(u,cost){
   const reserve=Math.max(0,cost-u.pe);
   const t=teams[u.side];
   if(!affordable(u,cost))return false;
-  if(reserve&&!window.confirm('Usare '+reserve+' dalla Riserva Arcana per coprire i PE mancanti?'))return false;
+  if(reserve&&!controllers[u.side]&&!window.confirm('Usare '+reserve+' dalla Riserva Arcana per coprire i PE mancanti?'))return false;
   u.pe-=cost-reserve;t.reserve-=reserve;t.spent+=reserve;
   return true;
 }
@@ -401,7 +412,7 @@ function offerReaction(u,id,apply,pass){
     if(!pay(u,cards[id][1]))return;
     discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
     note(name(u)+' usa '+cards[id][0]+'.');apply();
-  }],['Passa',pass]],u.side);
+  },{reaction:id,unit:u}],['Passa',pass]],u.side);
   return true;
 }
 function offerTimeBlock(side,done){
@@ -409,13 +420,14 @@ function offerTimeBlock(side,done){
   const candidates=units.filter(v=>v.side!==side&&v.cell!==null&&canReact(v,'timeBlock')&&
     t.hand.some(id=>cards[id][2].startsWith('Utilità')&&cards[id][1]+1<=v.pe+Math.min(t.reserve,2-t.spent)));
   if(!candidates.length){done();return;}
+  const resumeTurn=()=>{choice=null;if(phase!=='end')phase='action';done();};
   choose('Reazione nel Turno avversario',[
     ...candidates.map(v=>['Blocco Temporale · '+name(v),()=>{
       if(!pay(v,1))return;
       discard(v.side,t.hand.indexOf('timeBlock'));t.reaction=true;
-      utilityReaction={order,index,done,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
-      order=[...order];order[index]=v.id;v.played=[];mode='move';phase='action';show(v.side);
-    }]),['Passa',done]],1-side);
+      utilityReaction={order,index,done:resumeTurn,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
+      order=[...order];order[index]=v.id;v.played=[];choice=null;mode='move';phase='action';show(v.side);
+    },{reaction:'timeBlock',unit:v}]),['Passa',resumeTurn]],1-side);
 }
 function finishTimeBlock(){
   const u=active(),saved=utilityReaction;
@@ -448,6 +460,7 @@ function targetUnit(c){
   pending={id,defender};
   if(id==='chargeAttack'){
     choose('Scegli dove terminare la carica',[],u.side,chargeDestinations(u,defender));
+    choice.moving=u;
     choice.apply=destination=>traverse(u,near(u,Infinity).get(destination).route,()=>{
       if(u.cell===destination&&phase!=='end'){u.moved=true;offerVeto();return;}
       pending=null;
@@ -480,7 +493,7 @@ function movementReactions(u,from,to,done){
     ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v),()=>{
       if(!pay(v,cards[id][1]))return;
       discard(v.side,teams[v.side].hand.indexOf(id));teams[v.side].reaction=true;apply();
-    }]),['Passa',done]],1-u.side);
+    },{reaction:id,unit:v}]),['Passa',done]],1-u.side);
 }
 function offerVeto(){
   const {defender}=pending;
@@ -494,7 +507,10 @@ function additionalEffect(id,u,v){
   if(id==='wave'&&live){moveEffect(v,movementCells(v,3));return true;}
   if(id==='fist'&&live){
     const positions=cells.filter(c=>!at(c)&&distance(v.cell,c)<=2);
-    const select=()=>chooseCell('Teletrasporta '+name(v),positions,c=>{v.cell=c;});
+    const select=()=>{
+      chooseCell('Teletrasporta '+name(v),positions,c=>{v.cell=c;});
+      if(positions.length)choice.moving=v;
+    };
     if(!offerReaction(v,'domain',resume,select))select();
     return true;
   }
@@ -518,6 +534,7 @@ function additionalEffect(id,u,v){
       if(loan>=0)borrowed.splice(loan,1);else borrowed.push({id,holder:u.side,owner:v.side});
       teams[u.side].hand.push(id);resume();
     }]),...(!t.hand.length?[['Continua',resume]]:[])]);
+    choice.intent='take';
     return true;
   }
   if(id==='swap'&&live){
@@ -635,8 +652,9 @@ function reactDash(){
   note(name(u)+' usa Scatto Fulmineo.');
   phase='dash';render();
 }
-function selectCell(c){
-  if(!legalCells().includes(c))return;
+function selectCell(c,selection=mode){
+  if(!legalCells(selection).includes(c))return;
+  mode=selection;
   const u=active();
   if(phase==='selection'){choice.apply(c);return;}
   if(phase==='action'&&(cellCreations.includes(mode)||mode==='relocate'||mode==='dissolve'||(mode==='arc'&&!at(c)))){
@@ -783,6 +801,186 @@ function destroy(i){
   discard(u.side,i);barriers[1-u.side]=null;ritualReady=false;
   note('Barriera di Forza distrutta.');render();
 }
+
+function canPlay(u,id){
+  const [,cost,type]=cards[id];
+  if(type.startsWith('Reazione')||!affordable(u,cost)||u.played.includes(id))return false;
+  if(utilityReaction&&(!type.startsWith('Utilità')||utilityReaction.used||['remote','duplicate'].includes(id)))return false;
+  if(effectiveRange(u,type)==='Vista'&&has(u,'Accecato'))return false;
+  if(isAttack(id)&&!canAttack(u))return false;
+  const ally=units.find(v=>v.side===u.side&&v!==u);
+  if(id==='remote')return ally.cell!==null;
+  if(id==='inversion')return !teams[u.side].ritual&&ally.cell!==null;
+  if(id==='cleanse')return Object.keys(u.conditions).length>0;
+  if(id==='illumination')return teams[u.side].discard.length>0;
+  return true;
+}
+
+function canDestroy(u,id){
+  const e=barriers[1-u.side];
+  return isAttack(id)&&e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)))&&affordable(u,cards[id][1]);
+}
+
+function discardForCharge(side,i){
+  discard(side,i);
+  if(teams[side].hand.length<=6)advance();
+  else render();
+}
+
+function discardFromProbe(side,i){
+  discard(side,i);phase='action';render();
+}
+
+function cardChoice(option,where){
+  const u=active(),t=teams[u.side];
+  if(choice.id==='oracle'){
+    const [id]=t.hand.splice(option,1);
+    if(where==='cima')t.deck.unshift(id);else t.deck.push(id);
+  }else if(choice.id==='illumination'){
+    t.hand.push(...t.discard.splice(t.discard.indexOf(option),1));
+  }else if(choice.id==='radiance'){
+    applyCondition(option,'Accecato');choice.options=choice.options.filter(v=>v!==option);
+    if(choice.options.length){render();return;}
+  }else{
+    delete u.conditions[option];
+    if(option==='Maledetto')damage(u,1);
+  }
+  finishChoice();
+}
+
+function computerTurn(){
+  if(phase==='end'||botStopped||!controllers[viewer])return;
+  const side=viewer, level=controllers[side], u=active(), t=teams[side];
+  const unit=phase==='setup'?units[setup[0]]:phase==='dash'||phase==='afterDamage'?choice.unit:choice?.moving??u;
+  const hand=orderedHand(t.hand);
+  const actions=[];
+  const add=(kind,run,data={})=>actions.push({kind,run,...data});
+  const addCell=(c,selection=mode,data={})=>add('cell',()=>selectCell(c,selection),{cell:c,card:selection,...data});
+  if(phase==='action'&&mode!=='jump'){
+    const movement=legalCells('move');
+    if(movement.length){
+      const reach=walk(u);
+      movement.forEach(c=>addCell(c,'move',{cost:reach.get(c).cost,route:reach.get(c).route}));
+    }
+    if(utilityReaction)add('end',finishTimeBlock);
+    else if(origin?.required)add('end',()=>{origin=null;resume();});
+    else{
+      add('end',charge);
+      if(ritualReady&&canRitual())add('ritual',ritualAction);
+    }
+    for(const id of new Set(['arc',...t.hand])){
+      if(!canPlay(u,id))continue;
+      const positions=legalCells(id);
+      const edges=targets(id);
+      for(const c of positions)addCell(c,id,{target:at(c)});
+      for(const e of edges)add('edge',()=>{mode=id;selectCreation({edge:e});},{card:id,edge:e});
+      if(!positions.length&&!edges.length&&untargetedSpells.has(id))add('spell',()=>pick(id),{card:id});
+    }
+    for(const {id,i} of hand)if(canDestroy(u,id))add('destroy',()=>destroy(i),{card:id,edge:barriers[1-side]});
+  }else{
+    for(const c of legalCells())addCell(c);
+    if(phase==='charge'){
+      if(hand.length<=6)add('end',advance);
+      for(const {id,i} of hand)add('discard',()=>discardForCharge(side,i),{card:id});
+    }else if(phase==='probe'){
+      // The acting Arcimago can see these cards while resolving Sonda Telepatica.
+      for(const {id,i} of orderedHand(teams[1-side].hand))add('take',()=>discardFromProbe(1-side,i),{card:id});
+      if(!actions.length)add('skip',resume);
+    }else if(phase==='reaction'){
+      add('reaction',()=>resolve(true),{card:'veto',target:pending.defender,incoming:pending.id});
+      add('skip',()=>resolve(false));
+    }else if(phase==='afterDamage'){
+      add('reaction',reactDash,{card:'dash',target:unit});
+      add('skip',finishDash);
+    }else if(phase==='dash'){
+      add('skip',finishDash);
+    }else if(phase==='selection'){
+      for(const [label,run,details] of choice.options){
+        const card=details?.reaction??Object.keys(cards).find(id=>cards[id][0]===label);
+        const kind=details?.reaction?'reaction':choice.intent??'option';
+        add(kind,run,{label,card,target:details?.unit});
+      }
+    }else if(phase==='choice'){
+      for(const option of choice.options){
+        if(choice.id==='oracle'){
+          for(const where of ['cima','fondo'])add('oracle',()=>cardChoice(option,where),{card:t.hand[option],where});
+        }else add(choice.id,()=>cardChoice(option),{card:option,label:option});
+      }
+      if(!actions.length||choice.id==='radiance')add('skip',finishChoice);
+    }
+  }
+
+  const enemy=1-side;
+  const foes=units.filter(v=>v.side===enemy&&v.cell!==null);
+  const positional=new Map();
+  const reachFrom=(actor,c)=>paths([c],Infinity,(a,b)=>passable(actor,a,b)?1:Infinity);
+  const enemyReach=level==='hard'?foes.map(v=>[v,reachFrom(v,v.cell)]):[];
+  const goalDistances=new Map();
+  function position(actor,c){
+    if(!positional.has(actor.id+':'+c)){
+      const opponents=actor.side===side?foes:units.filter(v=>v.side===side&&v.cell!==null);
+      if(!goalDistances.has(actor.id)){
+        const step=(a,b)=>passable(actor,a,b)?1:Infinity;
+        const approach=opponents.flatMap(v=>neighbors(v.cell).filter(n=>passable(actor,n,v.cell)));
+        goalDistances.set(actor.id,{
+          ritual:paths(ritual,Infinity,step),
+          combat:paths(approach,Infinity,step),
+        });
+      }
+      const goals=goalDistances.get(actor.id);
+      const ritualDistance=goals.ritual.get(c)?.cost??30;
+      const combatDistance=goals.combat.get(c)?.cost??30;
+      const exposed=opponents.filter(v=>sight(v.cell,center(c),v.side)).length;
+      const pressure=actor.side===side?enemyReach.reduce((sum,[v,reach])=>
+        sum+Number((reach.get(c)?.cost??Infinity)<=(v.type==='Terra'?5:6)),0):0;
+      const blockedRitual=opponents.some(v=>distance(c,v.cell)===1);
+      positional.set(actor.id+':'+c,{ritualDistance,combatDistance,exposed,pressure,blockedRitual});
+    }
+    return positional.get(actor.id+':'+c);
+  }
+  function followUp(c,cost){
+    if(origin||utilityReaction||has(u,'Confuso'))return 0;
+    const moved={...u,cell:c,pm:u.pm-cost,moved:true};
+    const attacksInHand=['arc',...t.hand.filter(isAttack)].filter(id=>canPlay(moved,id));
+    let best=0;
+    for(const id of attacksInHand){
+      for(const targetCell of legalCells(id,moved)){
+        const target=at(targetCell);
+        if(target?.side!==enemy||has(target,'Pietrificato'))continue;
+        const damage=attacks[id]?.damage??(id==='arc'?1:2);
+        best=Math.max(best,damage+(target.hp<=damage?3:0)-cards[id][1]*.18);
+      }
+    }
+    return best;
+  }
+  const currentAttack=level==='hard'&&phase==='action'&&mode!=='jump'?followUp(u.cell,0):0;
+  const state={level,side,phase,mode,unit,hand:t.hand,own:{
+    kills:t.kills,ritual:t.ritual,reserve:t.reserve,
+  },opponent:{
+    kills:teams[enemy].kills,ritual:teams[enemy].ritual,reserve:teams[enemy].reserve,reaction:teams[enemy].reaction,
+  },foes,creations,position,followUp,currentAttack,cards,attacks,afflictions};
+  const action=chooseComputerAction(actions,state);
+  if(action)action.run();
+  else{
+    botStopped=true;paused=true;render();
+  }
+}
+
+const untargetedSpells=new Set([
+  'remote','duplicate','ghost','penetrate','frenzy','inversion','karmic','vortex','projection',
+  'cleanse','oracle','illumination','radiance','stride','meditate','refill','veil','feral','probe',
+]);
+
+function scheduleComputer(){
+  clearTimeout(botTimer);
+  spectatorControls.hidden=matchMode!=='spectator';
+  toggleComputers.textContent=paused?'Avvia':'Pausa';
+  const finished=phase==='end'||botStopped;
+  toggleComputers.disabled=finished;
+  stepComputers.disabled=finished||!paused;
+  if(finished||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
+  botTimer=setTimeout(computerTurn,matchMode==='spectator'?Number(computerSpeed.value):320);
+}
 const actions=[];
 const attr=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
 function button(label,fn,enabled=true,cls='',tip=''){
@@ -803,7 +1001,8 @@ function render(){
   if(utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
   actions.length=0;
   const u=active(),t=teams[u.side];
-  const visible=viewer!==null;
+  const automated=Boolean(controllers[viewer]);
+  const visible=viewer!==null&&!automated;
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
   const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
@@ -846,67 +1045,55 @@ function render(){
   if(visible&&phase==='selection')controls=choice.options.map(([label,fn])=>button(label,fn)).join('');
   if(visible&&phase==='choice'){
     controls=choice.options.map(option=>{
-      if(choice.id==='oracle')return ['cima','fondo'].map(where=>button(cards[t.hand[option]][0]+' · '+where,()=>{
-        const [id]=t.hand.splice(option,1);
-        if(where==='cima')t.deck.unshift(id);else t.deck.push(id);
-        finishChoice();
-      })).join('');
-      if(choice.id==='illumination')return button(cards[option][0],()=>{
-        t.hand.push(...t.discard.splice(t.discard.indexOf(option),1));finishChoice();
-      });
-      if(choice.id==='radiance')return button(name(option),()=>{
-        applyCondition(option,'Accecato');choice.options=choice.options.filter(v=>v!==option);
-        if(choice.options.length)render();else finishChoice();
-      });
-      return button(option,()=>{
-        delete u.conditions[option];
-        if(option==='Maledetto')damage(u,1);
-        finishChoice();
-      });
+      if(choice.id==='oracle')return ['cima','fondo'].map(where=>button(cards[t.hand[option]][0]+' · '+where,()=>cardChoice(option,where))).join('');
+      const label=choice.id==='illumination'?cards[option][0]:choice.id==='radiance'?name(option):option;
+      return button(label,()=>cardChoice(option));
     }).join('');
     if(!choice.options.length||choice.id==='radiance')controls+=button('Termina scelta',finishChoice);
   }
-  if(visible&&['action','charge','probe'].includes(phase)){
-    const side=phase==='probe'?1-u.side:u.side;
+  const interactiveHand=visible&&['action','charge','probe'].includes(phase);
+  const humanSide=controllers.findIndex(level=>!level);
+  const showOwnHand=matchMode==='solo'&&phase!=='end';
+  const handSide=interactiveHand?(phase==='probe'?1-u.side:u.side):showOwnHand?humanSide:null;
+  if(handSide!==null){
+    const side=handSide;
     hand=orderedHand(teams[side].hand).map(({id,i,label,cost,type,range,description},position,entries)=>{
-      const e=barriers[1-u.side];
-      const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
-      const playable=phase==='action'&&mode!=='jump'&&type!=='Reazione'&&affordable(u,cost)&&!u.played.includes(id)
-        && (!utilityReaction||(type==='Utilità'&&!utilityReaction.used&&!['remote','duplicate'].includes(id)))
-        && !(effectiveRange(u,cards[id][2])==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
+      const playable=interactiveHand&&phase==='action'&&mode!=='jump'&&canPlay(u,id);
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
       const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary;
       const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description;
+      if(!interactiveHand)return button(content,()=>{},false,appearance,tooltip);
       if(phase==='charge'){
         return '<div class="discard-card">'+button(content,()=>{},true,appearance,tooltip)+
-          button('Scarta',()=>{
-            discard(side,i);
-            if(t.hand.length<=6)advance();
-            else render();
-          },true,'discard-button','Scarta '+label)+'</div>';
+          button('Scarta',()=>discardForCharge(side,i),true,'discard-button','Scarta '+label)+'</div>';
       }
       return button(content,()=>{
-        if(phase==='probe'){discard(side,i);phase='action';render();}
+        if(phase==='probe')discardFromProbe(side,i);
         else pick(id);
       },playable||phase!=='action',appearance,tooltip)+
-      (phase==='action'&&mode!=='jump'&&isAttack(id)&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,cost)):'');
+      (phase==='action'&&mode!=='jump'&&canDestroy(u,id)?button('Scarta per distruggere',()=>destroy(i)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
   }
   const turnBar=document.querySelector('#turn');
   turnBar.className=viewer?'turn-blue':'turn-red';
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
-  turnBar.textContent='Round '+round+' · '+(choiceTitle??title);
+  const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
+  turnBar.textContent='Round '+round+' · '+(automated&&phase!=='end'?publicTitle:choiceTitle??title);
+  const instruction=botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
+    :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
+    :choice?.text??prompt??'Completa la scelta o termina il Turno.';
   const historyOpen=root.querySelector('details')?.open;
   root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
-    (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'')+
-    '<p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+(choice?.text??prompt??'Completa la scelta o termina il Turno.')+'</p><div class="actions">'+controls+'</div>'+
+    (hand?'<section class="hand"><h3>'+(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide])+'</h3><div class="cards">'+hand+'</div></section>':'')+
+    '<p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div>'+
     teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<div class="stats">'+k.type+' · '+k.hp+' PF · '+k.pe+' PE'+(k===u&&phase!=='setup'?' · '+k.pm+' PM':'')+'</div>').join('')+'</div>').join('')+
     (hand?'<div id="card-detail" class="card-detail"></div>':'')+
     (log.length?'<p class="muted">'+log[0]+'</p><details '+(historyOpen?'open':'')+'><summary>Registro</summary><ul class="log">'+log.slice(0,15).map(l=>'<li>'+l+'</li>').join('')+'</ul></details>':'')+'</aside></div>';
   previewCard();
+  scheduleComputer();
 }
 function previewCard(card=root.querySelector('.card.selected')){
   const detail=root.querySelector('#card-detail');
@@ -935,18 +1122,63 @@ document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova par
 const titleScreen=document.querySelector('#title-screen');
 const matchHeader=document.querySelector('#match-header');
 const startLocal=document.querySelector('#start-local');
-startLocal.onclick=()=>{
-  start();
+const startSolo=document.querySelector('#start-solo');
+const startSpectator=document.querySelector('#start-spectator');
+const setupForm=document.querySelector('#computer-setup');
+const titleMenu=startLocal.parentElement;
+let selectedMatch='local';
+function openMatch(type,players){
+  matchMode=type;
+  controllers=players;
   titleScreen.hidden=true;
   matchHeader.hidden=false;
   root.hidden=false;
+  start();
   document.querySelector('#turn').focus();
+}
+function showSetup(type){
+  selectedMatch=type;
+  const solo=type==='solo';
+  titleMenu.hidden=true;
+  setupForm.hidden=false;
+  document.querySelector('#computer-mode').textContent=solo?'Giocatore vs Computer':'Computer vs Computer';
+  document.querySelector('#side-setting').hidden=!solo;
+  document.querySelector('#blue-setting').hidden=solo;
+  document.querySelector('#level-label').textContent=solo?'Difficoltà':'Difficoltà del Rosso';
+  document.querySelector(solo?'#human-side':'#computer-level').focus();
+}
+function closeSetup(){
+  setupForm.hidden=true;
+  titleMenu.hidden=false;
+}
+startLocal.onclick=()=>openMatch('local',[null,null]);
+startSolo.onclick=()=>showSetup('solo');
+startSpectator.onclick=()=>showSetup('spectator');
+document.querySelector('#cancel-setup').onclick=()=>{
+  closeSetup();
+  (selectedMatch==='solo'?startSolo:startSpectator).focus();
 };
+setupForm.onsubmit=event=>{
+  event.preventDefault();
+  const level=document.querySelector('#computer-level').value;
+  const players=[level,document.querySelector('#blue-level').value];
+  if(selectedMatch==='solo'){
+    const human=Number(document.querySelector('#human-side').value);
+    players[human]=null;
+    players[1-human]=level;
+  }
+  closeSetup();
+  openMatch(selectedMatch,players);
+};
+toggleComputers.onclick=()=>{paused=!paused;scheduleComputer();};
+stepComputers.onclick=()=>{if(paused&&matchMode==='spectator')computerTurn();};
+computerSpeed.onchange=scheduleComputer;
 document.querySelector('#main-menu').onclick=()=>{
   if(phase!=='end'&&!confirm('Tornare al menu principale? La partita in corso terminerà.'))return;
+  clearTimeout(botTimer);
   matchHeader.hidden=true;
   root.hidden=true;
   root.replaceChildren();
   titleScreen.hidden=false;
-  startLocal.focus();
+  (matchMode==='solo'?startSolo:matchMode==='spectator'?startSpectator:startLocal).focus();
 };

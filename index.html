@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=5">
+<link rel="stylesheet" href="./style.css?v=6">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -28,18 +28,42 @@
       <span>Giocatore vs Giocatore</span><span class="title-menu-aside" aria-hidden="true">→</span>
       <small>Due giocatori sullo stesso dispositivo</small>
     </button>
-    <button type="button" disabled>
-      <span>Giocatore vs Computer</span><small class="title-menu-aside">In arrivo</small>
+    <button id="start-solo" type="button">
+      <span>Giocatore vs Computer</span><span class="title-menu-aside" aria-hidden="true">→</span>
       <small>Affronta il computer in solitaria</small>
     </button>
+    <button id="start-spectator" type="button">
+      <span>Computer vs Computer</span><span class="title-menu-aside" aria-hidden="true">→</span>
+      <small>Osserva due avversari automatici</small>
+    </button>
   </nav>
+  <form id="computer-setup" class="computer-setup" hidden>
+    <h2 id="computer-mode"></h2>
+    <label id="side-setting">Il tuo Arcimago
+      <select id="human-side"><option value="0">Rosso</option><option value="1">Blu</option></select>
+    </label>
+    <label><span id="level-label">Difficoltà</span>
+      <select id="computer-level"><option value="easy">Facile</option><option value="normal" selected>Normale</option><option value="hard">Difficile</option></select>
+    </label>
+    <label id="blue-setting">Difficoltà del Blu
+      <select id="blue-level"><option value="easy">Facile</option><option value="normal" selected>Normale</option><option value="hard">Difficile</option></select>
+    </label>
+    <div><button type="submit">Inizia partita</button> <button type="button" id="cancel-setup">Indietro</button></div>
+  </form>
 </main>
 <header id="match-header" hidden>
   <h1>Simulacra</h1>
   <div id="turn" role="status" tabindex="-1"></div>
+  <div id="spectator-controls" hidden>
+    <button id="toggle-computers" type="button">Avvia</button>
+    <button id="step-computers" type="button">Avanza di una decisione</button>
+    <label>Velocità
+      <select id="computer-speed"><option value="1000">Lenta</option><option value="550" selected>Normale</option><option value="120">Rapida</option></select>
+    </label>
+  </div>
   <button id="reset" type="button">Nuova partita</button>
   <button id="main-menu" type="button">Menu principale</button>
 </header>
 <main id="game" hidden></main>
-<script type="module" src="./game.mjs?v=6"></script>
+<script type="module" src="./game.mjs?v=7"></script>
 </html>
