@@ -33,6 +33,9 @@ export function intersects([ax,ay,bx,by],[cx,cy,dx,dy]) {
     && cross(cx,cy,dx,dy,ax,ay)*cross(cx,cy,dx,dy,bx,by)<=0;
 }
 export const blocked = (segment, obstacles=walls)=>obstacles.some(w=>intersects(segment,w));
+export function lineOfSight([x,y],[a,b],obstacles=walls) {
+  return (x===a||y===b)&&!blocked([x,y,a,b],obstacles);
+}
 export const mid = ([x,y,a,b])=>[(x+a)/2,(y+b)/2];
 export const wallBetween = (a,b)=>blocked([...center(a),...center(b)]);
 export function paths(starts, max, step) {

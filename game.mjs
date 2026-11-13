@@ -1,4 +1,4 @@
-import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,wallBetween,paths,respawn} from './engine.mjs';
+import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -37,7 +37,7 @@ function show(side){
   }else render();
 }
 function obstacles(side){return barriers[1-side]?[...walls,barriers[1-side]]:walls;}
-function sight(c,target,side){return !blocked([...center(c),...target],obstacles(side));}
+function sight(c,target,side){return lineOfSight(center(c),target,obstacles(side));}
 function walk(u){
   return paths([u.cell],u.pm,(a,b)=>{
     if(blocked([...center(a),...center(b)],obstacles(u.side)))return Infinity;
@@ -63,7 +63,7 @@ function targets(){
       [0,.5],[1,.5],[.5,0],[.5,1],
     ].some(([dx,dy])=>{
       const [x,y]=xy(u.cell);
-      return !blocked([x+dx,y+dy,...mid(e)],obstacles(u.side));
+      return lineOfSight([x+dx,y+dy],mid(e),obstacles(u.side));
     }));
 }
 function begin(){
