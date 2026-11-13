@@ -26,6 +26,16 @@ const conditions={
 const afflictions={gravity:'Rallentato',frost:'Rallentato',vertigo:'Confuso',curse:'Maledetto'};
 const pool=['cut','wall','probe','veto','cut','veto'];
 const reserveDeck=['stride','gravity','meditate','frost','veil','curse','refill','vertigo','feral','dissolve'];
+const types=['Attacco','Utilità','Reazione'];
+const ranges=['Personale','Tocco','Vista','Ovunque'];
+function orderedHand(hand){
+  return hand.map((id,i)=>{
+    const [label,cost,category,description]=cards[id];
+    const [type,range]=category.split(' · ');
+    return {id,i,label,cost,type,range,description};
+  }).sort((a,b)=>types.indexOf(a.type)-types.indexOf(b.type)
+    ||ranges.indexOf(a.range)-ranges.indexOf(b.range)||b.cost-a.cost);
+}
 function shuffle(deck){
   for(let i=deck.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
@@ -304,16 +314,17 @@ function render(){
   if(visible&&phase==='reaction')controls=button('Veto Arcano · 3 PE',()=>resolve(true))+button('Passa',()=>resolve(false));
   if(visible&&['action','charge','probe'].includes(phase)){
     const side=phase==='probe'?1-u.side:u.side;
-    hand=teams[side].hand.map((id,i)=>{
-      const [label,cost,type,description]=cards[id];
+    hand=orderedHand(teams[side].hand).map(({id,i,label,cost,type,range,description},position,entries)=>{
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
       const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)&&!(id==='cut'&&(u.attacked||(has(u,'Confuso')&&u.moved)));
-      return button('<strong>'+label+'</strong><small>'+type.split(' · ')[0]+' · '+cost+' PE</small>',()=>{
+      const previous=entries[position-1];
+      const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
+      return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+range+'</small>',()=>{
         if(phase==='probe'){discard(side,i);phase='action';render();}
         else if(phase==='charge'){discard(side,i);phase='refill';render();}
         else pick(id);
-      },playable||phase!=='action','card '+(mode===id?'selected':''),label+'\n'+type+' · '+cost+' PE\n'+description)+
+      },playable||phase!=='action','card '+(mode===id?'selected':'')+boundary,label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description)+
       (phase==='action'&&mode!=='jump'&&id==='cut'&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,2)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});

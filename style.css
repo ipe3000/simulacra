@@ -30,3 +30,4 @@ h1{font-size:25px}
 .card-detail:empty{display:none}details .log{max-height:95px;overflow:auto}
 @media(max-width:900px),(max-height:520px){.play-area{max-width:none}}
 .card[aria-disabled=true]{opacity:.6;cursor:default}
+.card.group-start{margin-inline-start:5px}.card small+small{margin-top:2px}
