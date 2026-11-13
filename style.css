@@ -11,3 +11,5 @@ dialog{color:inherit;background:#242523;border:1px solid var(--gold);border-radi
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 @media(max-width:900px){.layout{grid-template-columns:1fr}header,main{padding:14px}.panel{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 .wall::before{content:"";position:absolute;inset:0 -3px;background:inherit;border-radius:inherit}.wall{translate:0 -3px}
+.wall,.edge.barrier{pointer-events:auto}.wall::before{pointer-events:auto}
+.cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:revert-layer}.cell.redzone[aria-disabled=true]:hover{background-color:#a64a4540}.cell.bluezone[aria-disabled=true]:hover{background-color:#4f82ad40}.cell.ritual[aria-disabled=true]:hover{background-color:#6f925640}

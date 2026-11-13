@@ -6,8 +6,26 @@ const cards={
   wall:['Barriera di Forza',3,'Utilità · Vista','Blocca movimento e vista dei nemici. Un nemico adiacente può distruggerla scartando un Attacco e pagandone il costo.'],
   probe:['Sonda Telepatica',3,'Utilità · Ovunque','Guarda la mano avversaria e scegli una carta da scartare.'],
   veto:['Veto Arcano',3,'Reazione · Personale','Quando sei bersaglio, annulla l’effetto e perdi 1 PF. L’attaccante ottiene 2 PE e pesca una carta.'],
+  stride:['Piede Svelto',0,'Utilità · Personale','Ottieni 1 PM per questo Turno.'],
+  meditate:['Meditazione Metafisica',1,'Utilità · Personale','Pesca 2 carte.'],
+  refill:['Ricarica Arcana',1,'Utilità · Personale','Recupera 2 Riserva Arcana, fino a 4.'],
+  veil:['Velo d’Ombra',2,'Utilità · Personale','Ottieni Invisibile.'],
+  gravity:['Campo Gravitazionale',2,'Utilità · Vista','Il bersaglio diventa Rallentato.'],
+  frost:['Morsa Ghiacciata',3,'Utilità · Ovunque','Il bersaglio diventa Rallentato.'],
+  vertigo:['Vertigine Psichica',3,'Utilità · Ovunque','Il bersaglio diventa Confuso.'],
+  curse:['Canto Dannato',1,'Utilità · Vista','Il bersaglio diventa Maledetto.'],
+  feral:['Trasmutazione Ferina',2,'Utilità · Personale','Ottieni 3 PM. Se sei Rallentato, rimuovi la Condizione e il suo effetto.'],
+  dissolve:['Dissolvi Creazione',2,'Utilità · Vista','Rimuovi una Creazione, anche se indistruttibile.'],
 };
+const conditions={
+  Rallentato:'Ottiene 2 PM in meno all’inizio del suo Turno.',
+  Invisibile:'Non può essere bersaglio di incantesimi con gittata Vista.',
+  Confuso:'Nel suo Turno può muoversi oppure attaccare.',
+  Maledetto:'Perde 1 PF al Caricamento. La Condizione si rimuove quando è adiacente a un nemico.',
+};
+const afflictions={gravity:'Rallentato',frost:'Rallentato',vertigo:'Confuso',curse:'Maledetto'};
 const pool=['cut','wall','probe','veto','cut','veto'];
+const reserveDeck=['stride','gravity','meditate','frost','veil','curse','refill','vertigo','feral','dissolve'];
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
 const dialog=document.querySelector('#handoff');
@@ -19,8 +37,8 @@ const note=t=>log.unshift(t);
 const same=(a,b)=>a.every((v,i)=>v===b[i]);
 
 function start(){
-  units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null}));
-  teams=[0,1].map(()=>({hand:[...pool],deck:[...pool,...pool,...pool,...pool],discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false}));
+  units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
+  teams=[0,1].map(()=>({hand:[...pool],deck:[...reserveDeck,...pool,...reserveDeck.slice(0,8)],discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false}));
   const first=Math.random()<.5?0:1;
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
@@ -38,6 +56,18 @@ function show(side){
 }
 function obstacles(side){return barriers[1-side]?[...walls,barriers[1-side]]:walls;}
 function sight(c,target,side){return lineOfSight(center(c),target,obstacles(side));}
+function edgeSight(u,e){
+  const [x,y]=xy(u.cell);
+  return [[0,.5],[1,.5],[.5,0],[.5,1]].some(([dx,dy])=>
+    lineOfSight([x+dx,y+dy],mid(e),[...walls,...barriers.filter((b,i)=>b&&b!==e&&i!==u.side)]));
+}
+const has=(u,condition)=>Object.hasOwn(u.conditions,condition);
+const turn=()=>4*(round-1)+index;
+function clearCurses(){
+  for(const u of units){
+    if(u.cell!==null&&has(u,'Maledetto')&&neighbors(u.cell).some(c=>at(c)?.side===1-u.side))delete u.conditions.Maledetto;
+  }
+}
 function walk(u){
   return paths([u.cell],u.pm,(a,b)=>{
     if(blocked([...center(a),...center(b)],obstacles(u.side)))return Infinity;
@@ -49,27 +79,27 @@ function legalCells(){
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
   if(phase==='spawn')return respawn(zones[u.side],c=>!at(c));
   if(phase!=='action')return [];
-  if(mode==='move')return [...walk(u).keys()].filter(c=>!at(c));
+  if(mode==='move')return has(u,'Confuso')&&u.attacked?[]:[...walk(u).keys()].filter(c=>!at(c));
   if(mode==='jump')return cells.filter(c=>!at(c)&&sight(u.cell,center(c),u.side));
   if(mode==='arc'||mode==='cut')return neighbors(u.cell).filter(c=>at(c)?.side===1-u.side
     && !(round===1&&zones[1-u.side].includes(c))&&sight(u.cell,center(c),u.side));
+  if(afflictions[mode])return units.filter(v=>v.cell!==null&&v!==u&&
+    (['frost','vertigo'].includes(mode)||(!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side)))).map(v=>v.cell);
   return [];
 }
 function targets(){
   const u=active();
-  if(phase!=='action'||mode!=='wall')return [];
+  if(phase!=='action')return [];
+  if(mode==='dissolve')return barriers.filter(e=>e&&edgeSight(u,e));
+  if(mode!=='wall')return [];
   return cells.flatMap(c=>neighbors(c).filter(n=>n>c&&!wallBetween(c,n)).map(n=>edge(c,n)))
-    .filter(e=>!barriers.some(b=>b&&same(b,e)) && [
-      [0,.5],[1,.5],[.5,0],[.5,1],
-    ].some(([dx,dy])=>{
-      const [x,y]=xy(u.cell);
-      return lineOfSight([x+dx,y+dy],mid(e),obstacles(u.side));
-    }));
+    .filter(e=>!barriers.some(b=>b&&same(b,e))&&edgeSight(u,e));
 }
 function begin(){
   const u=active();
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
   mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
+  u.moved=false;u.slowPenalty=has(u,'Rallentato')?2:0;u.pm-=u.slowPenalty;
   phase=u.cell===null?'spawn':'action';
   ritualReady=phase==='action'&&canRitual();
   show(u.side);
@@ -92,13 +122,11 @@ function draw(side){
 function discard(side,i){const t=teams[side];t.discard.push(...t.hand.splice(i,1));}
 function affordable(u,cost){const t=teams[u.side];return cost<=u.pe+Math.min(t.reserve,2-t.spent);}
 function pay(u,cost){
-  const min=Math.max(0,cost-u.pe);
+  const reserve=Math.max(0,cost-u.pe);
   const t=teams[u.side];
-  const max=Math.min(cost,t.reserve,2-t.spent);
-  if(min>max)return false;
-  const reserve=max>min?window.prompt('Segnalini di Riserva Arcana da spendere ('+min+'–'+max+')',String(min)):String(min);
-  if(reserve===null||!/^\d+$/.test(reserve)||+reserve<min||+reserve>max)return false;
-  u.pe-=cost-Number(reserve);t.reserve-=Number(reserve);t.spent+=Number(reserve);
+  if(!affordable(u,cost))return false;
+  if(reserve&&!window.confirm('Usare '+reserve+' dalla Riserva Arcana per coprire i PE mancanti?'))return false;
+  u.pe-=cost-reserve;t.reserve-=reserve;t.spent+=reserve;
   return true;
 }
 function cast(id){
@@ -118,16 +146,16 @@ function damage(u,amount){
   u.hp=Math.max(0,u.hp-amount);
   note(name(u)+' perde '+amount+' PF.');
   if(u.hp===0){
-    u.cell=null;teams[1-u.side].kills++;
+    u.cell=null;u.conditions={};teams[1-u.side].kills++;
     teams[u.side].reserve=Math.min(4,teams[u.side].reserve+2);
     note(name(u)+' è caduto.');
     victory(1-u.side);
   }
 }
-function attack(c){
+function targetUnit(c){
   const id=mode,u=active(),defender=at(c);
   if(!cast(id))return;
-  u.attacked=true;
+  if(id==='arc'||id==='cut')u.attacked=true;
   pending={id,defender};
   const t=teams[defender.side];
   if(t.hand.includes('veto')&&!t.reaction&&affordable(defender,3)){
@@ -143,7 +171,9 @@ function resolve(veto){
     note(labels[defender.side]+' annulla l’incantesimo con Veto Arcano.');
   }
   phase='action';pending=null;mode='move';
-  damage(defender,veto||id==='arc'?1:2);
+  if(veto||id==='arc'||id==='cut')damage(defender,veto||id==='arc'?1:2);
+  else if(!has(defender,afflictions[id]))defender.conditions[afflictions[id]]=turn();
+  clearCurses();
   if(phase!=='end'){
     if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
@@ -160,14 +190,14 @@ function selectCell(c){
   }
   if(phase==='spawn'){
     u.cell=c;u.hp=u.type==='Terra'?8:6;u.pe=4;phase='action';ritualReady=canRitual();
-  }else if(mode==='arc'||mode==='cut'){attack(c);return;}
+  }else if(mode==='arc'||mode==='cut'||afflictions[mode]){targetUnit(c);return;}
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
-    u.cell=c;u.pm-=route.cost;ritualReady=false;
+    u.cell=c;u.pm-=route.cost;ritualReady=false;u.moved=true;
     note(name(u)+' si muove · '+route.cost+' PM.');
   }
-  render();
+  clearCurses();render();
 }
 function charge(){
   phase='charge';mode='move';render();
@@ -177,6 +207,14 @@ function advance(){
   if(t.hand.length>6)return;
   while(t.hand.length<6&&(t.deck.length||t.discard.length))draw(u.side);
   u.pe=4;u.pm=0;
+  clearCurses();
+  if(has(u,'Maledetto')&&u.conditions.Maledetto<turn()){
+    damage(u,1);
+    if(phase==='end'){render();return;}
+  }
+  for(const [condition,applied] of Object.entries(u.conditions)){
+    if(condition!=='Maledetto'&&applied<turn())delete u.conditions[condition];
+  }
   index=(index+1)%4;if(index===0)round++;
   begin();
 }
@@ -187,6 +225,18 @@ function ritualAction(){
   if(!victory(u.side))charge();else render();
 }
 function pick(id){
+  if(['stride','meditate','refill','veil','feral'].includes(id)){
+    if(!cast(id))return;
+    const u=active(),t=teams[u.side];
+    if(id==='stride')u.pm++;
+    if(id==='meditate'){draw(u.side);draw(u.side);}
+    if(id==='refill')t.reserve=Math.min(4,t.reserve+2);
+    if(id==='veil'&&!has(u,'Invisibile'))u.conditions.Invisibile=turn();
+    if(id==='feral'){
+      u.pm+=3+u.slowPenalty;u.slowPenalty=0;delete u.conditions.Rallentato;
+    }
+    mode='move';render();return;
+  }
   if(id==='probe'){
     if(!cast(id))return;
     phase='probe';mode='move';render();return;
@@ -200,17 +250,19 @@ function destroy(i){
   note('Barriera di Forza distrutta.');render();
 }
 const actions=[];
-function button(label,fn,enabled=true,cls=''){
+const attr=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+function button(label,fn,enabled=true,cls='',tip=''){
   const i=actions.push(fn)-1;
-  return '<button type="button" data-action="'+i+'" class="'+cls+'" '+(enabled?'':'disabled')+'>'+label+'</button>';
+  const unavailable=cls.startsWith('cell ')?'aria-disabled="true" tabindex="-1"':'disabled';
+  return '<button type="button" data-action="'+i+'" class="'+cls+'" title="'+attr(tip)+'" '+(enabled?'':unavailable)+'>'+label+'</button>';
 }
-function line(e,cls,fn){
+function line(e,cls,fn,tip){
   const [x,y,a,b]=e;
   const vert=x===a;
   const style='left:'+(x/13*100)+'%;top:'+(y/6*100)+'%;width:'+((vert?b-y:a-x)/13*100)+'%;transform:rotate('+(vert?90:0)+'deg)';
-  if(!fn)return '<span class="'+cls+'" style="'+style+'"></span>';
+  if(!fn)return '<span class="'+cls+'" style="'+style+'" title="'+attr(tip)+'"></span>';
   const i=actions.push(fn)-1;
-  return '<button aria-label="Crea barriera sul confine '+e.join(', ')+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
+  return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
 }
 function render(){
   actions.length=0;
@@ -219,25 +271,32 @@ function render(){
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
   const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
-  const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.'}[mode],charge:'Scarta una carta se vuoi, poi ricarica.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
+  const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.',dissolve:'Scegli una Creazione visibile.'}[mode]??'Scegli un Simulacro evidenziato.',charge:'Scarta una carta se vuoi, poi ricarica.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
   let board=cells.map(c=>{
     const token=at(c);
     const z=zones[0].includes(c)?'redzone':zones[1].includes(c)?'bluezone':ritual.includes(c)?'ritual':'';
     const [x,y]=xy(c),legal=valid.includes(c);
     const cost=legal?movement?.get(c).cost:null;
+    const tip=[
+      token&&[name(token)+' · '+token.hp+' PF · '+token.pe+' PE. Attraversare un nemico costa 2 PM. La pedina non blocca la vista.',
+        ...Object.keys(token.conditions).map(k=>k+' · '+conditions[k])].join('\n'),
+      z==='ritual'&&'Zona Rituale. Inizia qui la Fase di Azione senza nemici adiacenti per poter compiere il Rituale.',
+      (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
+    ].filter(Boolean).join('\n');
     return button((z?'<span class="mark">'+(z==='ritual'?'◇':'•')+'</span>':'')+
-      (token?'<span class="token '+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'" title="'+name(token)+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
-      ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''));
+      (token?'<span class="token '+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
+      ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
-  board+=walls.map(e=>line(e,'wall')).join('');
-  barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier '+(i?'blue':''));});
+  board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
+  barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
   if(visible)board+=targets().map(e=>line(e,'edge target',()=>{
-    if(cast('wall')){barriers[u.side]=e;mode='move';render();}
-  })).join('');
+    if(mode==='wall'&&cast('wall')){barriers[u.side]=e;mode='move';render();}
+    else if(mode==='dissolve'&&cast('dissolve')){barriers[barriers.indexOf(e)]=null;mode='move';render();}
+  },mode==='wall'?'Crea Barriera di Forza qui.':'Dissolvi questa Barriera di Forza.')).join('');
   let controls='',hand='';
   if(visible&&phase==='action'&&mode!=='jump'){
     controls=button('Muovi',()=>pick('move'),true,mode==='move'?'selected':'')
-      +button('Colpo Arcano',()=>pick('arc'),!u.attacked,mode==='arc'?'selected':'')
+      +button('Colpo Arcano',()=>pick('arc'),!u.attacked&&!(has(u,'Confuso')&&u.moved),mode==='arc'?'selected':'')
       +button('Rituale',ritualAction,ritualReady&&canRitual())
       +button('Caricamento',charge);
   }
@@ -249,7 +308,7 @@ function render(){
       const [label,cost,type,description]=cards[id];
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
-      const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)&&!(id==='cut'&&u.attacked);
+      const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)&&!(id==='cut'&&(u.attacked||(has(u,'Confuso')&&u.moved)));
       return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+description+'</small>',()=>{
         if(phase==='probe'){discard(side,i);phase='action';render();}
         else if(phase==='charge'){discard(side,i);phase='refill';render();}
@@ -270,7 +329,7 @@ function render(){
 }
 root.addEventListener('click',event=>{
   const b=event.target.closest('button[data-action]');
-  if(b&&!b.disabled)actions[Number(b.dataset.action)]?.();
+  if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
 });
 document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova partita?'))start();};
 dialog.addEventListener('cancel',event=>event.preventDefault());
