@@ -35,7 +35,6 @@ function shuffle(deck){
 }
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
-const dialog=document.querySelector('#handoff');
 let units,teams,order,index,round,setup,viewer,phase,mode,barriers,log,winner,ritualReady,pending;
 const active=()=>units[order[index]];
 const at=c=>units.find(u=>u.cell===c);
@@ -56,13 +55,8 @@ function start(){
   show(first);
 }
 function show(side){
-  if(viewer!==side){
-    viewer=null;
-    render();
-    dialog.querySelector('p').textContent='Tocca all’Arcimago '+labels[side]+'.';
-    dialog.onclose=()=>{viewer=side;render();};
-    if(!dialog.open)dialog.showModal();
-  }else render();
+  viewer=side;
+  render();
 }
 function obstacles(side){return barriers[1-side]?[...walls,barriers[1-side]]:walls;}
 function sight(c,target,side){return lineOfSight(center(c),target,obstacles(side));}
@@ -328,7 +322,7 @@ function render(){
     controls=button('Ricarica e termina',advance,t.hand.length<=6);
     if(t.hand.length>6) hand=t.hand.map((id,i)=>button('Scarta '+cards[id][0],()=>{discard(u.side,i);render();})).join('');
   }
-  root.innerHTML='<section class="status"><span class="eyebrow">ROUND '+round+'</span><h2>'+(phase==='refill'?'Caricamento · '+name(u):title)+'</h2><p>'+(prompt??'Riporta la mano a sei carte e termina il Turno.')+'</p></section><div class="layout"><section><div class="board">'+board+'</div><p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><h3>Arcimaghi</h3>'+
+  root.innerHTML='<section class="status '+(viewer?'turn-blue':'turn-red')+'"><span class="eyebrow">ROUND '+round+(phase==='end'?'':' · TOCCA A '+labels[viewer].toUpperCase())+'</span><h2>'+(phase==='refill'?'Caricamento · '+name(u):title)+'</h2><p>'+(prompt??'Riporta la mano a sei carte e termina il Turno.')+'</p></section><div class="layout"><section><div class="board">'+board+'</div><p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><h3>Arcimaghi</h3>'+
     teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<div class="stats">'+k.type+' · '+k.hp+' PF · '+k.pe+' PE'+(k===u&&phase!=='setup'?' · '+k.pm+' PM':'')+'</div>').join('')+'</div>').join('')+
     '<div class="actions">'+controls+'</div><h3>Registro</h3><ul class="log">'+log.slice(0,5).map(l=>'<li>'+l+'</li>').join('')+'</ul></aside></div>'+
     (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'');
@@ -338,5 +332,4 @@ root.addEventListener('click',event=>{
   if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
 });
 document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova partita?'))start();};
-dialog.addEventListener('cancel',event=>event.preventDefault());
 start();

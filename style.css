@@ -13,3 +13,4 @@ dialog{color:inherit;background:#242523;border:1px solid var(--gold);border-radi
 .wall::before{content:"";position:absolute;inset:0 -3px;background:inherit;border-radius:inherit}.wall{translate:0 -3px}
 .wall,.edge.barrier{pointer-events:auto}.wall::before{pointer-events:auto}
 .cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:revert-layer}.cell.redzone[aria-disabled=true]:hover{background-color:#a64a4540}.cell.bluezone[aria-disabled=true]:hover{background-color:#4f82ad40}.cell.ritual[aria-disabled=true]:hover{background-color:#6f925640}
+.status.turn-red{border-inline-start:5px solid #ffac99}.status.turn-red .eyebrow{color:#ffac99}.status.turn-blue{border-inline-start:5px solid #a4d2ff}.status.turn-blue .eyebrow{color:#a4d2ff}
