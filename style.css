@@ -46,12 +46,15 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .card-detail{border-color:#7b805e}
 .team strong,#turn.turn-red{color:#f5a086}
 .team.blue strong,#turn.turn-blue{color:#adc5ec}
-.board{background:#66534e url('./dungeon.png') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
-.cell{box-shadow:none;border:0}
-.cell.redzone,.cell.bluezone,.cell.ritual,.cell.redzone[aria-disabled=true]:hover,.cell.bluezone[aria-disabled=true]:hover,.cell.ritual[aria-disabled=true]:hover{background-color:transparent}
-.cell .mark{opacity:0}
+.board{background:#66534e url('./dungeon.png?v=2') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
+.cell{box-shadow:none;border:1px solid #291b2059}
+.cell.redzone,.cell.redzone[aria-disabled=true]:hover{background-color:#e6856a26}
+.cell.bluezone,.cell.bluezone[aria-disabled=true]:hover{background-color:#a9c8ee26}
+.cell.ritual,.cell.ritual[aria-disabled=true]:hover{background-color:#b7d88f26}
+.cell .mark{color:#fff0d5;text-shadow:0 1px 2px #241718;line-height:1;pointer-events:none}
 .cell.legal,.cell.legal:hover:not([aria-disabled=true]){background:#ffd98728;box-shadow:inset 0 0 0 2px #ffd987}
-.wall,.wall::before{background:transparent}
+.wall{height:4px;translate:0 -2px;background:#39282a;border-top:1px solid #c0a085;border-radius:0}
+.wall::before{background:transparent}
 .token{width:72%;height:72%;border:0;border-radius:0;background:transparent;color:#ffc1a1;text-shadow:2px 2px #352127;font-weight:900}
 .token.blue{background:transparent;color:#c3d5f4}
 .token::before{content:"";position:absolute;inset:0;z-index:-1;background:#a8564f;box-shadow:inset 0 3px #eaa279,inset 0 -4px #663740}
