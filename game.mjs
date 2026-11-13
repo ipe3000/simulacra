@@ -127,27 +127,38 @@ function show(side){
   viewer=side;
   render();
 }
-function obstacles(side){
-  return [...walls,...barriers.filter((b,i)=>b&&i!==side),...creations.filter(v=>v.side!==side&&v.edge).map(v=>v.edge)];
+function sightWalls(side, target, ignoreSupportingWall=false){
+  const portals=creations.filter(v=>v.id==='portal');
+  const maze=(portals.length||ignoreSupportingWall)?walls.flatMap(([x,y,a,b])=>{
+    const dx=Math.sign(a-x),dy=Math.sign(b-y);
+    return Array.from({length:Math.abs(a-x)+Math.abs(b-y)},(_,i)=>
+      [x+i*dx,y+i*dy,x+(i+1)*dx,y+(i+1)*dy]);
+  }).filter(e=>!(ignoreSupportingWall&&same(e,target))&&!portals.some(v=>same(v.edge,e))):walls;
+  const edges=creations.filter(v=>v.edge&&v.side!==side).map(v=>v.edge);
+  return [...maze,...barriers.filter((e,i)=>e&&i!==side),...edges].filter(e=>e!==target);
 }
-function sight(c,target,side){
-  const boxes=creations.filter(v=>v.cell!==undefined&&v.side!==side).flatMap(v=>{
+function sightBoxes(side, ignored){
+  return creations.filter(v=>v!==ignored&&v.cell!==undefined
+    &&(v.id==='ballista'||(v.id==='cube'&&v.side!==side))).flatMap(v=>{
     const [x,y]=xy(v.cell);
     return [[x,y,x+1,y],[x+1,y,x+1,y+1],[x,y+1,x+1,y+1],[x,y,x,y+1]];
   });
-  const from=origin&&origin.unit===active()&&active().cell===c&&active().side===side?origin.cell:c;
-  const start=center(from), blockers=[...obstacles(side),...boxes];
-  if(lineOfSight(start,target,blockers))return true;
-  if(!active().penetrate||active().side!==side||c!==active().cell)return false;
-  const [x,y]=target;
-  if((x!==start[0]&&y!==start[1])||(x===start[0]&&y===start[1]))return false;
-  const back=[x-Math.sign(x-start[0]),y-Math.sign(y-start[1])];
-  return !blocked([...start,...back],blockers);
 }
-function edgeSight(u,e){
-  const [x,y]=xy(origin?.unit===u?origin.cell:u.cell);
-  return [[0,.5],[1,.5],[.5,0],[.5,1]].some(([dx,dy])=>
-    lineOfSight([x+dx,y+dy],mid(e),obstacles(u.side).filter(b=>b!==e)));
+function sight(c,target,side,{ignored,penetrate=false}={}){
+  const start=center(c),walls=sightWalls(side),boxes=sightBoxes(side,ignored);
+  if(lineOfSight(start,target,[...walls,...boxes]))return true;
+  const [x,y]=target;
+  if(!penetrate||(x!==start[0]&&y!==start[1])||(x===start[0]&&y===start[1]))return false;
+  const previous=[x-Math.sign(x-start[0]),y-Math.sign(y-start[1])];
+  return !blocked([...start,...target],boxes)&&!blocked([...start,...previous],walls);
+}
+const spellOrigin=u=>origin?.unit===u?origin.cell:u.cell;
+const spellSight=(u,c,ignored)=>sight(spellOrigin(u),center(c),u.side,{ignored,penetrate:u.penetrate});
+const effectiveRange=(u,category)=>u.projection&&category.endsWith('Tocco')?'Vista':category.split(' · ').at(-1);
+function edgeSight(u,e,ignoreSupportingWall=false){
+  const [x,y]=xy(spellOrigin(u));
+  const blockers=[...sightWalls(u.side,e,ignoreSupportingWall),...sightBoxes(u.side)];
+  return [[0,.5],[1,.5],[.5,0],[.5,1]].some(([dx,dy])=>lineOfSight([x+dx,y+dy],mid(e),blockers));
 }
 const has=(u,condition)=>Object.hasOwn(u.conditions,condition);
 const turn=()=>serial;
@@ -159,20 +170,22 @@ function clearCurses(){
 function applyCondition(u,condition){
   if(condition&&u.cell!==null&&!has(u,condition))u.conditions[condition]=turn();
 }
-function walk(u,budget=u.pm){
-  const step=(a,b)=>{
-    if(!passable(u,a,b))return Infinity;
-    return at(b)?.side===1-u.side||creations.some(v=>v.id==='cube'&&v.cell===a&&v.side!==u.side)?2:1;
-  };
-  const reach=paths([u.cell],budget,step);
-  if(u.ghost&&u===active()&&budget===u.pm){
+function stepCost(u,a,b){
+  const enemy=units.some(v=>v.cell===b&&v.side!==u.side);
+  const cube=creations.some(v=>v.id==='cube'&&v.cell===a&&v.side!==u.side);
+  return 1+Number(enemy)+Number(cube);
+}
+function walk(u){
+  const step=(a,b)=>passable(u,a,b)?stepCost(u,a,b):Infinity;
+  const reach=paths([u.cell],u.pm,step);
+  if(u.ghost){
     for(const [a,before] of [...reach])for(const b of neighbors(a)){
       if(passable(u,a,b))continue;
-      const cost=before.cost+(at(b)?.side===1-u.side?2:1);
-      if(cost>budget)continue;
-      for(const [c,after] of paths([b],budget-cost,step)){
+      const cost=before.cost+stepCost(u,a,b);
+      if(cost>u.pm)continue;
+      for(const [c,after] of paths([b],u.pm-cost,step)){
         const total=cost+after.cost;
-        if(total<(reach.get(c)?.cost??Infinity))reach.set(c,{cost:total,route:[...before.route,...after.route],ghost:true});
+        if(total<(reach.get(c)?.cost??Infinity))reach.set(c,{cost:total,route:[...before.route,...after.route]});
       }
     }
   }
@@ -187,29 +200,28 @@ function legalCells(){
   const u=active();
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
   if(phase==='spawn')return respawn(zones[u.side],free);
-  if(phase==='dash')return [...walk(choice.unit,3).keys()].filter(c=>!at(c));
+  if(phase==='dash')return [...near(choice.unit,3).keys()].filter(c=>!at(c));
   if(phase==='selection')return choice.positions??[];
   if(phase!=='action')return [];
+  if(cards[mode]&&effectiveRange(u,cards[mode][2])==='Vista'&&has(u,'Accecato'))return [];
   if(mode==='move')return utilityReaction||origin?.required||(has(u,'Confuso')&&u.attacked)?[]:[...walk(u).keys()].filter(c=>!at(c));
-  if(mode==='jump')return cells.filter(c=>free(c)&&sight(u.cell,center(c),u.side));
+  if(mode==='jump')return cells.filter(c=>free(c)&&spellSight(u,c));
   if(mode==='leap')return cells.filter(c=>free(c)&&distance(c,u.cell)<=2);
   if(cellCreations.includes(mode))return creationCells(u,mode);
+  if(mode==='relocate'&&has(u,'Accecato'))return [];
   if(mode==='dissolve'||mode==='relocate')return creations.filter(v=>v.cell!==undefined
     && (mode==='relocate'?v.side===u.side:visibleCreation(u,v))).map(v=>v.cell);
   if(isAttack(mode)){
-    const range=u.projection?cards[mode][2].replace('Tocco','Vista'):cards[mode][2];
     const reach=mode==='ray'?paths([origin?.unit===u?origin.cell:u.cell],3,(a,b)=>passable(u,a,b)?1:Infinity):null;
     const unitTargets=units.filter(v=>v.side!==u.side&&v.cell!==null
       && !(round===1&&zones[v.side].includes(v.cell))
       && !u.attackTargets.includes(v.id)
-      && (mode==='chargeAttack'?chargeDestinations(u,v).length>0:mode==='bounce'?!has(u,'Accecato')&&!has(v,'Invisibile')&&bouncedSight(u,v):reach?reach.has(v.cell):range.endsWith('Tocco')
-        ?distance(origin?.unit===u?origin.cell:u.cell,v.cell)===1&&sight(u.cell,center(v.cell),u.side)
-        :!has(u,'Accecato')&&!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side))).map(v=>v.cell);
-    if(mode==='arc')unitTargets.push(...creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&distance(v.cell,u.cell)===1&&!wallBetween(v.cell,u.cell)).map(v=>v.cell));
+      && (mode==='chargeAttack'?chargeDestinations(u,v).length>0:mode==='bounce'?!has(u,'Accecato')&&!has(v,'Invisibile')&&bouncedSight(u,v):reach?reach.has(v.cell):inRange(u,v,cards[mode][2]))).map(v=>v.cell);
+    if(mode==='arc')unitTargets.push(...creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&inRange(u,v,cards.arc[2],v)).map(v=>v.cell));
     return unitTargets;
   }
   if(afflictions[mode])return units.filter(v=>v.cell!==null&&v!==u&&
-    (['frost','vertigo'].includes(mode)||(!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side)))).map(v=>v.cell);
+    inRange(u,v,cards[mode][2])).map(v=>v.cell);
   if(unitSpells.includes(mode))return units.filter(v=>v.cell!==null&&v!==u
     && (mode==='exchange'?v.side===u.side:['swap','push','substitute','stasis'].includes(mode)||v.side!==u.side)
     && inRange(u,v,cards[mode][2])).map(v=>v.cell);
@@ -217,27 +229,26 @@ function legalCells(){
 }
 function targets(){
   const u=active();
-  if(phase!=='action')return [];
+  if(phase!=='action'||(cards[mode]&&effectiveRange(u,cards[mode][2])==='Vista'&&has(u,'Accecato')))return [];
   if(mode==='dissolve')return [...barriers,...creations.map(v=>v.edge)].filter(e=>e&&edgeSight(u,e));
-  if(mode==='relocate')return [barriers[u.side],...creations.filter(v=>v.side===u.side).map(v=>v.edge)].filter(Boolean);
+  if(mode==='relocate'&&!has(u,'Accecato'))return [barriers[u.side],...creations.filter(v=>v.side===u.side).map(v=>v.edge)].filter(Boolean);
   return edgeCreations.includes(mode)?creationEdges(u,mode):[];
 }
-function creationEdges(u,id){
+function creationEdges(u,id,projected=u.projection){
   return cells.flatMap(c=>neighbors(c).filter(n=>n>c&&wallBetween(c,n)===(id==='portal')).map(n=>edge(c,n)))
     .filter(e=>![...barriers,...creations.map(v=>v.edge)].some(b=>b&&same(b,e))
       && (id==='spiritWall'||(['lightWall','portal'].includes(id)
-        ?neighbors(u.cell).some(n=>same(e,edge(n,u.cell))):edgeSight(u,e))));
+        ?(projected?edgeSight(u,e,id==='portal'):neighbors(spellOrigin(u)).some(n=>same(e,edge(n,spellOrigin(u)))))
+         :edgeSight(u,e))));
 }
 function visibleCreation(u,v){
-  const i=creations.indexOf(v);
-  creations.splice(i,1);
-  const visible=sight(u.cell,center(v.cell),u.side);
-  creations.splice(i,0,v);
-  return visible;
+  return spellSight(u,v.cell,v);
 }
-function creationCells(u,id){
-  return cells.filter(c=>free(c)&&(id==='cube'||(distance(c,u.cell)===1&&!wallBetween(c,u.cell)
-    && !units.some(v=>v.side!==u.side&&v.cell!==null&&sight(c,center(v.cell),u.side)))));
+function creationCells(u,id,projected=u.projection){
+  return cells.filter(c=>free(c)&&(id==='cube'||((projected
+    ? !has(u,'Accecato')&&spellSight(u,c)
+    : distance(c,spellOrigin(u))===1&&spellSight(u,c))
+    && !units.some(v=>v.side!==u.side&&v.cell!==null&&(sight(c,center(v.cell),u.side)||sight(v.cell,center(c),v.side))))));
 }
 function putCreation(id,location){
   const side=active().side;
@@ -253,12 +264,12 @@ function selectCreation(location){
   if(id==='relocate'){
     const kind=existing?.id??'wall';
     if(e){
-      const places=creationEdges(u,kind).filter(v=>edgeSight(u,v));
+      const places=creationEdges(u,kind,false).filter(v=>edgeSight(u,v,kind==='portal'));
       choose('Scegli il nuovo confine',places.map(v=>['Confine '+v.join(', '),()=>{
         if(cast(id)){putCreation(kind,{edge:v});resume();}
       }]).concat([['Annulla',resume]]));
     }else{
-      chooseCell('Scegli la nuova casella',creationCells(u,kind).filter(c=>sight(u.cell,center(c),u.side)),
+      chooseCell('Scegli la nuova casella',creationCells(u,kind,false).filter(c=>spellSight(u,c)),
         c=>{if(cast(id))putCreation(kind,{cell:c});});
     }
     return;
@@ -307,17 +318,17 @@ function discard(side,i){
   const destination=loan<0?side:borrowed.splice(loan,1)[0].owner;
   teams[destination].discard.push(id);
 }
-function inRange(u,v,category){
-  const range=u.projection?category.replace('Tocco','Vista'):category;
-  if(range.endsWith('Ovunque'))return true;
-  if(range.endsWith('Tocco'))return distance(origin?.unit===u?origin.cell:u.cell,v.cell)===1&&sight(u.cell,center(v.cell),u.side);
-  return !has(u,'Accecato')&&!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side);
+function inRange(u,v,category,ignored){
+  const range=effectiveRange(u,category);
+  if(range==='Ovunque')return true;
+  if(range==='Tocco')return distance(spellOrigin(u),v.cell)===1&&spellSight(u,v.cell,ignored);
+  return !has(u,'Accecato')&&(!v.conditions||!has(v,'Invisibile'))&&spellSight(u,v.cell,ignored);
 }
 function bouncedSight(u,v){
-  return sight(u.cell,center(v.cell),u.side)||cells.some(c=>sight(u.cell,center(c),u.side)&&sight(c,center(v.cell),u.side));
+  return spellSight(u,v.cell)||cells.some(c=>spellSight(u,c)&&sight(c,center(v.cell),u.side));
 }
 function chargeDestinations(u,v){
-  if(has(u,'Accecato')||!sight(u.cell,center(v.cell),u.side))return [];
+  if(has(u,'Accecato')||(u.projection&&has(v,'Invisibile'))||!spellSight(u,v.cell))return [];
   const reach=near(u,Infinity);
   return neighbors(v.cell).filter(c=>(c===u.cell||!at(c))&&reach.has(c)&&sight(c,center(v.cell),u.side));
 }
@@ -340,7 +351,12 @@ function swapUnits(a,b,done=resume){
 }
 function moveEffect(u,positions,done=resume,optional=true,side=active().side){
   if(!positions.length){done();return;}
-  const select=()=>chooseCell('Sposta '+name(u),positions,c=>{u.cell=c;},done,optional,side);
+  const select=()=>{
+    choose('Sposta '+name(u),optional?[['Salta',done]]:[],side,positions);
+    choice.apply=c=>traverse(u,near(u,Infinity).get(c).route,()=>{
+      if(phase==='end'){choice=null;render();}else done();
+    });
+  };
   if(!offerReaction(u,'domain',done,select))select();
 }
 function movementCells(u,n){return [...near(u,n).keys()].filter(c=>!at(c));}
@@ -363,6 +379,7 @@ function pay(u,cost){
 function cast(id){
   const u=active();
   if(utilityReaction&&(utilityReaction.used||!cards[id][2].startsWith('Utilità')))return false;
+  if(effectiveRange(u,cards[id][2])==='Vista'&&has(u,'Accecato'))return false;
   const index=teams[u.side].hand.indexOf(id);
   if(id!=='arc'&&index<0)return false;
   if(!pay(u,cards[id][1]))return false;
@@ -430,7 +447,12 @@ function targetUnit(c){
   if(isAttack(id)){u.attacked=true;u.attackTargets.push(defender.id);}
   pending={id,defender};
   if(id==='chargeAttack'){
-    chooseCell('Scegli dove terminare la carica',chargeDestinations(u,defender),c=>{u.cell=c;u.moved=true;},offerVeto,false);
+    choose('Scegli dove terminare la carica',[],u.side,chargeDestinations(u,defender));
+    choice.apply=destination=>traverse(u,near(u,Infinity).get(destination).route,()=>{
+      if(u.cell===destination&&phase!=='end'){u.moved=true;offerVeto();return;}
+      pending=null;
+      if(phase==='end'){choice=null;render();}else if(u.cell===null)charge();else resume();
+    });
     return;
   }
   offerVeto();
@@ -450,7 +472,7 @@ function movementReactions(u,from,to,done){
       &&v.sawTurn!==turn();
     if(firstSight){
       v.sawTurn=turn();
-      if(canReact(v,'presence'))options.push([v,'presence',()=>{u.pm=Math.max(0,u.pm-2);done();}]);
+      if(!has(v,'Accecato')&&!has(u,'Invisibile')&&canReact(v,'presence'))options.push([v,'presence',()=>{u.pm=Math.max(0,u.pm-2);done();}]);
     }
   }
   if(!options.length){done();return;}
@@ -470,7 +492,12 @@ function offerVeto(){
 function additionalEffect(id,u,v){
   const live=v.cell!==null;
   if(id==='wave'&&live){moveEffect(v,movementCells(v,3));return true;}
-  if(id==='fist'&&live){moveEffect(v,cells.filter(c=>!at(c)&&distance(v.cell,c)<=2));return true;}
+  if(id==='fist'&&live){
+    const positions=cells.filter(c=>!at(c)&&distance(v.cell,c)<=2);
+    const select=()=>chooseCell('Teletrasporta '+name(v),positions,c=>{v.cell=c;});
+    if(!offerReaction(v,'domain',resume,select))select();
+    return true;
+  }
   if(id==='shard'&&live){
     const select=left=>choose('Scegli '+(left.length===4?'la prima':'la seconda')+' Condizione',left.map(c=>[c,()=>{
       applyCondition(v,c);if(left.length===4)select(left.filter(x=>x!==c));else resume();
@@ -560,6 +587,43 @@ function resolve(veto){
   }
   show(u.side);
 }
+function traverse(u,route,done,spendPm=false){
+  let lastFree=u.cell,spent=0;
+  const occupied=c=>units.some(v=>v!==u&&v.cell===c);
+  const finish=()=>{
+    if(u.cell!==null&&occupied(u.cell))u.cell=lastFree;
+    done(spent);
+  };
+  const step=i=>{
+    if(i>=route.length||u.cell===null||phase==='end'){finish();return;}
+    const from=u.cell,destination=route[i],crossing=edge(from,destination);
+    const open=passable(u,from,destination);
+    if(!open&&!(spendPm&&u.ghost)){finish();return;}
+    if(spendPm){
+      const cost=stepCost(u,from,destination);
+      if(cost>u.pm){finish();return;}
+      u.pm-=cost;spent+=cost;
+      if(!open)u.ghost=false;
+    }
+    const visible=creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&!sight(v.cell,center(from),v.side,{ignored:v}));
+    u.cell=destination;
+    if(!occupied(destination))lastFree=destination;
+    for(const v of [...creations]){
+      if(u.cell===null||phase==='end')break;
+      if(v.side===u.side)continue;
+      if(v.edge&&same(crossing,v.edge)){
+        if(v.id==='illusion')u.noAttack=true;
+        if(v.id==='lightWall'){creations=creations.filter(w=>w!==v);damage(u,1);applyCondition(u,'Accecato');}
+      }
+      if(visible.includes(v)&&v.fired!==turn()&&sight(v.cell,center(destination),v.side,{ignored:v})){
+        v.fired=turn();damage(u,1);
+      }
+    }
+    if(u.cell===null||phase==='end'){finish();return;}
+    movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
+  };
+  step(1);
+}
 function finishDash(){
   const {resume:next,done}=choice;
   mode=next;phase='action';choice=null;done();
@@ -579,7 +643,11 @@ function selectCell(c){
     selectCreation({cell:c});return;
   }
   if(phase==='dash'){
-    choice.unit.cell=c;clearCurses();finishDash();return;
+    const dash=choice;
+    traverse(dash.unit,near(dash.unit,3).get(c).route,()=>{
+      choice=dash;clearCurses();
+      if(phase==='end'){choice=null;render();}else{if(dash.unit===active()&&dash.unit.cell===null){choice=null;charge();return;}finishDash();}
+    });return;
   }
   if(phase==='setup'){
     const placed=units[setup.shift()];placed.cell=c;
@@ -596,35 +664,14 @@ function selectCell(c){
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
-    u.pm-=route.cost;ritualReady=false;u.moved=true;
-    if(route.ghost)u.ghost=false;
-    note(name(u)+' si muove · '+route.cost+' PM.');
-    const finish=()=>{
+    ritualReady=false;u.moved=true;
+    traverse(u,route.route,spent=>{
+      if(spent)note(name(u)+' si muove · '+spent+' PM.');
       choice=null;clearCurses();
       if(phase==='end'){render();return;}
       if(u.cell===null){charge();return;}
       phase='action';offerTimeBlock(u.side,()=>show(u.side));
-    };
-    const step=i=>{
-      if(i>=route.route.length||u.cell===null||phase==='end'){finish();return;}
-      const from=u.cell,destination=route.route[i],crossing=edge(from,destination);
-      const visible=creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&!sight(v.cell,center(u.cell),v.side));
-      u.cell=destination;
-      for(const v of [...creations]){
-        if(u.cell===null||phase==='end')break;
-        if(v.side===u.side)continue;
-        if(v.edge&&same(crossing,v.edge)){
-          if(v.id==='illusion')u.noAttack=true;
-          if(v.id==='lightWall'){creations=creations.filter(w=>w!==v);damage(u,1);applyCondition(u,'Accecato');}
-        }
-        if(visible.includes(v)&&v.fired!==turn()&&sight(v.cell,center(destination),v.side)){
-          v.fired=turn();damage(u,1);
-        }
-      }
-      if(u.cell===null||phase==='end'){finish();return;}
-      movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
-    };
-    step(1);return;
+    },true);return;
   }
   clearCurses();render();
 }
@@ -724,6 +771,7 @@ function pick(id){
     if(!cast(id))return;
     phase='probe';mode='move';render();return;
   }
+  if(cards[id]&&effectiveRange(u,cards[id][2])==='Vista'&&has(u,'Accecato'))return;
   mode=mode===id?'move':id;render();
 }
 function finishChoice(){
@@ -825,7 +873,7 @@ function render(){
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
       const playable=phase==='action'&&mode!=='jump'&&type!=='Reazione'&&affordable(u,cost)&&!u.played.includes(id)
         && (!utilityReaction||(type==='Utilità'&&!utilityReaction.used&&!['remote','duplicate'].includes(id)))
-        && !(range==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
+        && !(effectiveRange(u,cards[id][2])==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
