@@ -4,7 +4,7 @@
 h1,h2,h3,p{margin:0}h1,h2{font-family:Georgia,serif}h1{font-size:42px;font-weight:normal;letter-spacing:.06em}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--gold)}
 button{font:inherit;color:inherit;border:1px solid var(--border);background:#292a29;border-radius:6px;padding:8px 12px;cursor:pointer}button:hover:not(:disabled),button:focus-visible{border-color:var(--gold)}button:disabled{opacity:.45;cursor:default}.selected{border-color:var(--gold);color:var(--gold)}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:20px}.board{position:relative;display:grid;grid-template-columns:repeat(13,1fr);background:repeating-linear-gradient(122deg,#393a39,#3c3d3b 8px,#383936 15px);border:1px solid var(--border)}
-.cell{position:relative;aspect-ratio:1;border:1px solid #ffffff18;border-radius:0;padding:0;background:transparent;opacity:1!important}.cell.legal{background:#dfc08035;box-shadow:inset 0 0 0 2px #dfc08090}.cell:disabled{cursor:default}.cell.redzone{background-color:#a64a4540}.cell.bluezone{background-color:#4f82ad40}.cell.ritual{background-color:#6f925640}.mark{position:absolute;left:5px;top:2px;color:#eee9ce90;font-size:12px}
+.cell{position:relative;aspect-ratio:1;border:1px solid #ffffff18;border-radius:0;padding:0;background:transparent;opacity:1!important}.cell.legal{background:#dfc08035;box-shadow:inset 0 0 0 2px #dfc08090}.cell:disabled{cursor:default}
 .wall,.edge{position:absolute;z-index:2;pointer-events:none;transform-origin:left center}.wall{height:6px;background:#111;border-radius:6px;translate:-2px -3px}.edge{pointer-events:auto;min-width:0;min-height:0;height:13px;padding:0;translate:0 -6px;background:#e8cb85;border:1px solid #221b0f}.edge.barrier{height:6px;translate:0 -3px;background:#db8c67;pointer-events:none}.edge.blue{background:#8eb9ee}.edge.target{z-index:4}
 .token{display:inline-grid;place-items:center;width:72%;height:72%;border-radius:50%;border:2px solid currentColor;background:#271d20;color:#ffac99;font-size:clamp(14px,2vw,29px);position:relative;z-index:3}.token.blue{background:#172633;color:#a4d2ff}.token.active{outline:2px solid #f5deb1;outline-offset:2px}
 .panel,.hand,.status{background:#222321;border:1px solid var(--border);border-radius:8px;padding:14px}.status{margin-bottom:12px}.status p,.muted{color:#c2beaf;font-size:14px}.status h2{margin:4px 0}.panel{display:grid;align-content:start;gap:10px}.team{padding:9px 0;border-bottom:1px solid var(--border);font-size:14px}.team strong{color:#ffac99}.team.blue strong{color:#a4d2ff}.stats{margin-top:4px}.actions{display:flex;flex-wrap:wrap;gap:6px}.hand{margin-top:14px}.cards{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.card{text-align:left;width:145px;min-height:85px}.card small{display:block;color:#c5bda9;margin-top:4px}.log{font-size:13px;color:#c4c0b1;padding-left:18px;margin:0}.log li{margin:4px 0}.key{margin:8px 0;color:#c4c0b1;font-size:13px}.route{color:#ffe9ad;font-size:16px}.cell:hover:not(:disabled){background-color:#e4c57d60}
@@ -13,7 +13,7 @@ dialog{color:inherit;background:#242523;border:1px solid var(--gold);border-radi
 @media(max-width:900px){.layout{grid-template-columns:1fr}header,main{padding:14px}.panel{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 .wall::before{content:"";position:absolute;inset:0 -3px;background:inherit;border-radius:inherit}.wall{translate:0 -3px}
 .wall,.edge.barrier{pointer-events:auto}.wall::before{pointer-events:auto}
-.cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:revert-layer}.cell.redzone[aria-disabled=true]:hover{background-color:#a64a4540}.cell.bluezone[aria-disabled=true]:hover{background-color:#4f82ad40}.cell.ritual[aria-disabled=true]:hover{background-color:#6f925640}
+.cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:revert-layer}
 .status.turn-red{border-inline-start:5px solid #ffac99}.status.turn-red .eyebrow{color:#ffac99}.status.turn-blue{border-inline-start:5px solid #a4d2ff}.status.turn-blue .eyebrow{color:#a4d2ff}
 
 header{padding-block:6px;gap:14px;min-height:48px}main{padding-top:10px}
@@ -47,12 +47,15 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .card-detail{border-color:#7b805e}
 .team strong,#turn.turn-red{color:#f5a086}
 .team.blue strong,#turn.turn-blue{color:#adc5ec}
-.board{background:#66534e url('./dungeon.png?v=2') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
+.board{background:#66534e url('./dungeon.png?v=3') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
 .cell{box-shadow:none;border:1px solid #291b2059}
-.cell.redzone,.cell.redzone[aria-disabled=true]:hover{background-color:#e6856a26}
-.cell.bluezone,.cell.bluezone[aria-disabled=true]:hover{background-color:#a9c8ee26}
-.cell.ritual,.cell.ritual[aria-disabled=true]:hover{background-color:#b7d88f26}
-.cell .mark{color:#fff0d5;text-shadow:0 1px 2px #241718;line-height:1;pointer-events:none}
+
+
+
+.cell .mark{position:absolute;width:52%;height:52%;inset:24%;pointer-events:none;stroke:#30201d;stroke-width:2;stroke-linejoin:round}
+.redzone .mark{fill:#ff7469}
+.bluezone .mark{fill:#75ceff}
+.ritual .mark{fill:none;stroke:#a9ef72;stroke-width:1.6;stroke-linecap:round;filter:drop-shadow(0 1px 1px #241718)}
 .cell.legal,.cell.legal:hover:not([aria-disabled=true]){background:#ffd98728;box-shadow:inset 0 0 0 2px #ffd987}
 .wall{height:4px;translate:0 -2px;background:#39282a;border-top:1px solid #c0a085;border-radius:0}
 .wall::before{background:transparent}
@@ -75,7 +78,7 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .token.on-creation{width:66%;height:66%;translate:12% -12%}
 .creation{position:absolute;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
 .creation.cube{--sprite:url('./sprites/cube.png')}
-.creation.ballista{--sprite:url('./sprites/ballista.png')}
+.creation.ballista{--sprite:url('./sprites/ballista.png?v=2')}
 .creation::after,.edge.barrier::after{content:"";position:absolute;width:5px;height:5px;background:#f1a085;box-shadow:0 0 0 1px #302225}
 .creation.blue::after,.edge.barrier.blue::after{background:#adc5ec}
 .creation::after{bottom:2px;right:2px}
