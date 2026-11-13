@@ -253,7 +253,7 @@ const actions=[];
 const attr=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
 function button(label,fn,enabled=true,cls='',tip=''){
   const i=actions.push(fn)-1;
-  const unavailable=cls.startsWith('cell ')?'aria-disabled="true" tabindex="-1"':'disabled';
+  const unavailable=(cls.startsWith('cell ')||cls.startsWith('card '))?(cls.startsWith('card ')?'aria-disabled="true"':'aria-disabled="true" tabindex="-1"'):'disabled';
   return '<button type="button" data-action="'+i+'" class="'+cls+'" title="'+attr(tip)+'" '+(enabled?'':unavailable)+'>'+label+'</button>';
 }
 function line(e,cls,fn,tip){
@@ -309,11 +309,11 @@ function render(){
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
       const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)&&!(id==='cut'&&(u.attacked||(has(u,'Confuso')&&u.moved)));
-      return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+description+'</small>',()=>{
+      return button('<strong>'+label+'</strong><small>'+type.split(' · ')[0]+' · '+cost+' PE</small>',()=>{
         if(phase==='probe'){discard(side,i);phase='action';render();}
         else if(phase==='charge'){discard(side,i);phase='refill';render();}
         else pick(id);
-      },playable||phase!=='action','card '+(mode===id?'selected':''))+
+      },playable||phase!=='action','card '+(mode===id?'selected':''),label+'\n'+type+' · '+cost+' PE\n'+description)+
       (phase==='action'&&mode!=='jump'&&id==='cut'&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,2)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
@@ -322,11 +322,36 @@ function render(){
     controls=button('Ricarica e termina',advance,t.hand.length<=6);
     if(t.hand.length>6) hand=t.hand.map((id,i)=>button('Scarta '+cards[id][0],()=>{discard(u.side,i);render();})).join('');
   }
-  root.innerHTML='<section class="status '+(viewer?'turn-blue':'turn-red')+'"><span class="eyebrow">ROUND '+round+(phase==='end'?'':' · TOCCA A '+labels[viewer].toUpperCase())+'</span><h2>'+(phase==='refill'?'Caricamento · '+name(u):title)+'</h2><p>'+(prompt??'Riporta la mano a sei carte e termina il Turno.')+'</p></section><div class="layout"><section><div class="board">'+board+'</div><p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><h3>Arcimaghi</h3>'+
+  const turnBar=document.querySelector('#turn');
+  turnBar.className=viewer?'turn-blue':'turn-red';
+  turnBar.textContent='Round '+round+' · '+(phase==='refill'?'Caricamento · '+name(u):title);
+  const historyOpen=root.querySelector('details')?.open;
+  root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
+    (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'')+
+    '<p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+(prompt??'Riporta la mano a sei carte e termina il Turno.')+'</p><div class="actions">'+controls+'</div>'+
     teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<div class="stats">'+k.type+' · '+k.hp+' PF · '+k.pe+' PE'+(k===u&&phase!=='setup'?' · '+k.pm+' PM':'')+'</div>').join('')+'</div>').join('')+
-    '<div class="actions">'+controls+'</div><h3>Registro</h3><ul class="log">'+log.slice(0,5).map(l=>'<li>'+l+'</li>').join('')+'</ul></aside></div>'+
-    (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'');
+    (hand?'<div id="card-detail" class="card-detail"></div>':'')+
+    (log.length?'<p class="muted">'+log[0]+'</p><details '+(historyOpen?'open':'')+'><summary>Registro</summary><ul class="log">'+log.slice(0,15).map(l=>'<li>'+l+'</li>').join('')+'</ul></details>':'')+'</aside></div>';
+  previewCard();
 }
+function previewCard(card=root.querySelector('.card.selected')){
+  const detail=root.querySelector('#card-detail');
+  if(detail)detail.textContent=card?.title||'Passa su una carta per leggerne l’effetto.';
+}
+root.addEventListener('pointerover',event=>{
+  const card=event.target.closest('.card');
+  if(card)previewCard(card);
+});
+root.addEventListener('pointerout',event=>{
+  const card=event.target.closest('.card');
+  if(card&&!card.contains(event.relatedTarget))previewCard();
+});
+root.addEventListener('focusin',event=>{
+  if(event.target.matches('.card'))previewCard(event.target);
+});
+root.addEventListener('focusout',event=>{
+  if(event.target.matches('.card'))previewCard();
+});
 root.addEventListener('click',event=>{
   const b=event.target.closest('button[data-action]');
   if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
