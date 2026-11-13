@@ -774,7 +774,7 @@ function render(){
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
     return button((z?'<span class="mark">'+(z==='ritual'?'◇':'•')+'</span>':'')+
-      (token?'<span class="token '+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':object?'<span class="creation">'+(object.id==='cube'?'▣':'➶')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
+      (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':object?'<span class="creation">'+(object.id==='cube'?'▣':'➶')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
       ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');

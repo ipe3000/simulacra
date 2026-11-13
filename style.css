@@ -32,3 +32,30 @@ h1{font-size:25px}
 .card[aria-disabled=true]{opacity:.6;cursor:default}
 .card.group-start{margin-inline-start:5px}.card small+small{margin-top:2px}
 .creation{display:inline-grid;place-items:center;border:1px solid #dfc080;border-radius:4px;width:62%;height:62%;background:#272c21;color:#ffe9ad;font-size:1.3rem}
+
+/* Salvia, ottone e pietra alla luce delle torce */
+:root{background:#1f2a23;color:#fff1d8;--gold:#ffd987;--border:#7f7957}
+header{background:#28372d}
+h1,h2{font-family:Georgia,serif;color:var(--gold)}
+button{background:#485941;border-color:#8d8a62;border-radius:0;box-shadow:inset 0 1px #929a72,inset 0 -3px #27352a}
+button.selected{background:var(--gold);color:#35231e}
+button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
+.panel,.hand,.status,dialog{background:#354638;border-radius:0;box-shadow:inset 0 0 0 2px #263429}
+.status p,.muted,.log,.key,.card small{color:#dddcc3}
+.card,.card-detail{background:#2c392e;border-radius:0}
+.card-detail{border-color:#7b805e}
+.team strong,#turn.turn-red{color:#f5a086}
+.team.blue strong,#turn.turn-blue{color:#adc5ec}
+.board{background:#66534e url('./dungeon.png') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
+.cell{box-shadow:none;border:0}
+.cell.redzone,.cell.bluezone,.cell.ritual,.cell.redzone[aria-disabled=true]:hover,.cell.bluezone[aria-disabled=true]:hover,.cell.ritual[aria-disabled=true]:hover{background-color:transparent}
+.cell .mark{opacity:0}
+.cell.legal,.cell.legal:hover:not([aria-disabled=true]){background:#ffd98728;box-shadow:inset 0 0 0 2px #ffd987}
+.wall,.wall::before{background:transparent}
+.token{width:72%;height:72%;border:0;border-radius:0;background:transparent;color:#ffc1a1;text-shadow:2px 2px #352127;font-weight:900}
+.token.blue{background:transparent;color:#c3d5f4}
+.token::before{content:"";position:absolute;inset:0;z-index:-1;background:#a8564f;box-shadow:inset 0 3px #eaa279,inset 0 -4px #663740}
+.token.blue::before{background:#687c9e;box-shadow:inset 0 3px #adc5ec,inset 0 -4px #404961}
+.token.earth::before{clip-path:polygon(25% 0,75% 0,75% 16%,90% 16%,90% 32%,100% 32%,100% 83%,83% 83%,83% 100%,60% 100%,60% 83%,40% 83%,40% 100%,17% 100%,17% 83%,0 83%,0 32%,10% 32%,10% 16%,25% 16%)}
+.token.lightning::before{clip-path:polygon(55% 0,90% 0,65% 32%,85% 32%,100% 57%,85% 78%,57% 78%,26% 100%,36% 75%,10% 75%,0 53%,17% 34%,35% 34%)}
+.token.active{outline-color:#ffd987}
