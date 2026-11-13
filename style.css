@@ -62,3 +62,35 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .token.earth::before{clip-path:polygon(25% 0,75% 0,75% 16%,90% 16%,90% 32%,100% 32%,100% 83%,83% 83%,83% 100%,60% 100%,60% 83%,40% 83%,40% 100%,17% 100%,17% 83%,0 83%,0 32%,10% 32%,10% 16%,25% 16%)}
 .token.lightning::before{clip-path:polygon(55% 0,90% 0,65% 32%,85% 32%,100% 57%,85% 78%,57% 78%,26% 100%,36% 75%,10% 75%,0 53%,17% 34%,35% 34%)}
 .token.active{outline-color:#ffd987}
+
+/* Creazioni e Simulacri in pixel art */
+.token,.token.blue{display:inline-block;width:94%;height:94%;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated;vertical-align:middle;filter:drop-shadow(0 1px 1px #25191b)}
+.token::before{content:none}
+.token.earth{--sprite:url('./sprites/mage-0-earth.png')}
+.token.lightning{--sprite:url('./sprites/mage-0-lightning.png')}
+.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png')}
+.token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png')}
+.token.active{outline-offset:-2px}
+.token.on-creation{width:66%;height:66%;translate:12% -12%}
+.creation{position:absolute;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
+.creation.cube{--sprite:url('./sprites/cube.png')}
+.creation.ballista{--sprite:url('./sprites/ballista.png')}
+.creation::after,.edge.barrier::after{content:"";position:absolute;width:5px;height:5px;background:#f1a085;box-shadow:0 0 0 1px #302225}
+.creation.blue::after,.edge.barrier.blue::after{background:#adc5ec}
+.creation::after{bottom:2px;right:2px}
+.edge.barrier{height:8px;translate:0 -4px;border:0;border-radius:0}
+.edge.barrier::after{right:3px;bottom:-3px}
+.edge.barrier.force{background:linear-gradient(#543641 0 12%,#ffe0b8 12% 35%,#ac6a74 35% 76%,#70444c 76%)}
+.edge.barrier.spiritWall{background:#4e7569;box-shadow:inset 0 1px #a9cbbc,inset 0 -1px #274239}
+.edge.barrier.spiritWall::before{content:"✦";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:bold 14px/1 monospace;color:#fff0bd;background:#35564c;padding:0 2px;text-shadow:1px 1px #254237}
+.edge.barrier.illusion{background:repeating-linear-gradient(135deg,#765382 0 4px,#c39acd 4px 6px,#765382 6px 10px),#765382;box-shadow:inset 0 1px #c39acd,inset 0 -1px #47314f}
+.edge.barrier.lightWall{background:linear-gradient(#9c7146 0 25%,#ffce78 25% 40%,#fff3c2 40% 65%,#e6aa60 65%)}
+.edge.barrier.portal{height:14px;translate:0 -5px;background:#736461;box-shadow:none}
+.edge.barrier.portal.vertical{height:11px;translate:0 -5px}
+.edge.barrier.portal::before{content:"";position:absolute;inset:0;opacity:.6;background:repeating-linear-gradient(90deg,transparent 0 7px,#414447 7px 8px),linear-gradient(#c1c3c4 0 15%,#9d9fa1 15% 45%,#737578 45% 82%,#414447 82%)}
+.card .card-type{display:block;margin:-5px -5px 4px;padding:2px 4px;background:var(--card-type);color:#fff5e5;font-size:11px;font-weight:700}
+.card.attack{--card-type:#873d3f}
+.card.reaction{--card-type:#3f587e}
+.card.utility{--card-type:#43663c}
+.card[aria-disabled=true]{opacity:1}
+.card[aria-disabled=true] strong,.card[aria-disabled=true] small{color:#c3c4ae}

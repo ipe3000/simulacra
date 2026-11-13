@@ -746,7 +746,7 @@ function line(e,cls,fn,tip){
   const [x,y,a,b]=e;
   const vert=x===a;
   const style='left:'+(x/13*100)+'%;top:'+(y/6*100)+'%;width:'+((vert?b-y:a-x)/13*100)+'%;transform:rotate('+(vert?90:0)+'deg)';
-  if(!fn)return '<span class="'+cls+'" style="'+style+'" title="'+attr(tip)+'"></span>';
+  if(!fn)return '<span class="'+cls+(vert?' vertical':'')+'" style="'+style+'" title="'+attr(tip)+'"></span>';
   const i=actions.push(fn)-1;
   return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
 }
@@ -774,12 +774,13 @@ function render(){
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
     return button((z?'<span class="mark">'+(z==='ritual'?'◇':'•')+'</span>':'')+
-      (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':object?'<span class="creation">'+(object.id==='cube'?'▣':'➶')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
+      (object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
+      (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
       ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
-  barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
-  creations.filter(v=>v.edge).forEach(v=>{board+=line(v.edge,'edge barrier '+(v.side?'blue':''),null,cards[v.id][0]+'. '+cards[v.id][3]);});
+  barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier force '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
+  creations.filter(v=>v.edge).forEach(v=>{board+=line(v.edge,'edge barrier '+v.id+' '+(v.side?'blue':''),null,cards[v.id][0]+' · '+labels[v.side]+'. '+cards[v.id][3]);});
   if(visible)board+=targets().map(e=>line(e,'edge target',()=>selectCreation({edge:e}),cards[mode][0])).join('');
   let controls='',hand='';
   if(visible&&phase==='action'&&mode!=='jump'&&!utilityReaction&&!origin?.required){
@@ -827,11 +828,11 @@ function render(){
         && !(range==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
-      return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+range+'</small>',()=>{
+      return button('<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>',()=>{
         if(phase==='probe'){discard(side,i);phase='action';render();}
         else if(phase==='charge'){discard(side,i);phase='refill';render();}
         else pick(id);
-      },playable||phase!=='action','card '+(mode===id?'selected':'')+boundary,label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description)+
+      },playable||phase!=='action','card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary,label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description)+
       (phase==='action'&&mode!=='jump'&&isAttack(id)&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,cost)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
