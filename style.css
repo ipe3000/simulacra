@@ -47,15 +47,11 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .card-detail{border-color:#7b805e}
 .team strong,#turn.turn-red{color:#f5a086}
 .team.blue strong,#turn.turn-blue{color:#adc5ec}
-.board{background:#66534e url('./dungeon.png?v=3') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
+.board{background:#66534e url('./dungeon.png?v=4') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
 .cell{box-shadow:none;border:1px solid #291b2059}
 
 
 
-.cell .mark{position:absolute;width:52%;height:52%;inset:24%;pointer-events:none;stroke:#30201d;stroke-width:2;stroke-linejoin:round}
-.redzone .mark{fill:#ff7469}
-.bluezone .mark{fill:#75ceff}
-.ritual .mark{fill:none;stroke:#a9ef72;stroke-width:1.6;stroke-linecap:round;filter:drop-shadow(0 1px 1px #241718)}
 .cell.legal,.cell.legal:hover:not([aria-disabled=true]){background:#ffd98728;box-shadow:inset 0 0 0 2px #ffd987}
 .wall{height:4px;translate:0 -2px;background:#39282a;border-top:1px solid #c0a085;border-radius:0}
 .wall::before{background:transparent}
@@ -77,8 +73,8 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .token.active{outline-offset:-2px}
 .token.on-creation{width:66%;height:66%;translate:12% -12%}
 .creation{position:absolute;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
-.creation.cube{--sprite:url('./sprites/cube.png')}
-.creation.ballista{--sprite:url('./sprites/ballista.png?v=2')}
+.creation.cube{--sprite:url('./sprites/cube.png?v=2')}
+.creation.ballista{--sprite:url('./sprites/ballista.png?v=3')}
 .creation::after,.edge.barrier::after{content:"";position:absolute;width:5px;height:5px;background:#f1a085;box-shadow:0 0 0 1px #302225}
 .creation.blue::after,.edge.barrier.blue::after{background:#adc5ec}
 .creation::after{bottom:2px;right:2px}

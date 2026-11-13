@@ -1036,10 +1036,7 @@ function render(){
       z==='ritual'&&'Zona Rituale. Inizia qui la Fase di Azione senza nemici adiacenti per poter compiere il Rituale.',
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
-    return button((z?'<svg class="mark" viewBox="0 0 24 24" aria-hidden="true">'+(z==='ritual'
-      ?'<circle cx="12" cy="12" r="9"/><path d="M12 6q4 1 2 5M17 14q-3 4-6 1M7 15q-2-4 2-6"/>'
-      :'<path d="m12 1 2.5 8.5L23 12l-8.5 2.5L12 23l-2.5-8.5L1 12l8.5-2.5Z"/>')+'</svg>':'')+
-      (object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
+    return button((object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
       (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
       ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
