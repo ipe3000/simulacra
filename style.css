@@ -94,3 +94,7 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .card.utility{--card-type:#43663c}
 .card[aria-disabled=true]{opacity:1}
 .card[aria-disabled=true] strong,.card[aria-disabled=true] small{color:#c3c4ae}
+
+.discard-card{display:grid;grid-template-rows:1fr auto;gap:4px;flex:1 0 104px;min-width:104px}
+.discard-card .card{width:100%;margin-inline-start:0}
+.discard-button{padding:4px 6px;font-size:12px}

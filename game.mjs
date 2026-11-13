@@ -759,7 +759,7 @@ function render(){
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
   const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
-  const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.',dissolve:'Scegli una Creazione visibile.'}[mode]??'Scegli un Simulacro evidenziato.',charge:'Scarta una carta se vuoi, poi ricarica.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
+  const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.',dissolve:'Scegli una Creazione visibile.'}[mode]??'Scegli un Simulacro evidenziato.',charge:t.hand.length>6?'Scarta '+(t.hand.length-6)+' per tornare a sei carte. Il turno passerà automaticamente.':'Scarta una carta per ricaricare e concludere il turno, oppure ricarica senza scartare.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
   let board=cells.map(c=>{
     const token=at(c);
     const object=creations.find(v=>v.cell===c);
@@ -791,7 +791,7 @@ function render(){
   }
   if(visible&&phase==='action'&&utilityReaction&&!utilityReaction.used)controls=button('Termina Reazione',finishTimeBlock);
   if(visible&&phase==='action'&&origin?.required&&!origin.consumed)controls=button('Rinuncia al secondo incantesimo',()=>{origin=null;resume();});
-  if(visible&&phase==='charge')controls=button('Ricarica e termina',advance,t.hand.length<=6);
+  if(visible&&phase==='charge'&&t.hand.length<=6)controls=button('Ricarica senza scartare',advance);
   if(visible&&phase==='reaction')controls=button('Veto Arcano · 3 PE',()=>resolve(true))+button('Passa',()=>resolve(false));
   if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · 1 PE',reactDash)+button('Passa',finishDash);
   if(visible&&phase==='dash')controls=button('Resta qui',finishDash);
@@ -828,23 +828,29 @@ function render(){
         && !(range==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
-      return button('<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>',()=>{
+      const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
+      const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary;
+      const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description;
+      if(phase==='charge'){
+        return '<div class="discard-card">'+button(content,()=>{},true,appearance,tooltip)+
+          button('Scarta',()=>{
+            discard(side,i);
+            if(t.hand.length<=6)advance();
+            else render();
+          },true,'discard-button','Scarta '+label)+'</div>';
+      }
+      return button(content,()=>{
         if(phase==='probe'){discard(side,i);phase='action';render();}
-        else if(phase==='charge'){discard(side,i);phase='refill';render();}
         else pick(id);
-      },playable||phase!=='action','card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary,label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description)+
+      },playable||phase!=='action',appearance,tooltip)+
       (phase==='action'&&mode!=='jump'&&isAttack(id)&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,cost)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
   }
-  if(visible&&phase==='refill'){
-    controls=button('Ricarica e termina',advance,t.hand.length<=6);
-    if(t.hand.length>6) hand=t.hand.map((id,i)=>button('Scarta '+cards[id][0],()=>{discard(u.side,i);render();})).join('');
-  }
   const turnBar=document.querySelector('#turn');
   turnBar.className=viewer?'turn-blue':'turn-red';
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
-  turnBar.textContent='Round '+round+' · '+(choiceTitle??(phase==='refill'?'Caricamento · '+name(u):title));
+  turnBar.textContent='Round '+round+' · '+(choiceTitle??title);
   const historyOpen=root.querySelector('details')?.open;
   root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
     (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'')+
@@ -874,6 +880,7 @@ root.addEventListener('focusout',event=>{
 });
 root.addEventListener('click',event=>{
   const b=event.target.closest('button[data-action]');
+  if(b?.matches('.discard-card .card')){previewCard(b);return;}
   if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
 });
 document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova partita?'))start();};
