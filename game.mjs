@@ -30,12 +30,19 @@ const attacks={
   gaze:{ref:18,damage:2,condition:'Pietrificato'},
   leech:{ref:19,damage:2,self:'Vulnerabile',heal:true},
   toxin:{ref:20,damage:2,condition:'Vulnerabile',drain:1},
+  wave:{ref:6,damage:2}, shard:{ref:7,damage:1}, necrotic:{ref:8,damage:2},
+  chargeAttack:{ref:10,damage:2}, fireball:{ref:12,damage:2}, fist:{ref:14,damage:1},
+  raid:{ref:16,damage:1}, bounce:{ref:17,damage:2},
 };
 for(const [id,{ref}] of Object.entries(attacks)){
   const {nome,costo,tipo,gittata,effetto}=catalog[ref-1];
   cards[id]=[nome,costo,tipo+' · '+gittata,effetto];
 }
-const extra={dash:26,projection:35,cleanse:44,oracle:52,illumination:61,radiance:62};
+const extra={dash:26,projection:35,cleanse:44,oracle:52,illumination:61,radiance:62,
+  swap:46,corrode:47,substitute:48,push:49,leap:55,exchange:56,karmic:59,contagion:60,
+  terrify:65,spray:66,frenzy:67,vortex:70,inversion:42,giant:32,stasis:45,
+  spiritWall:30,illusion:37,cube:39,relocate:40,ballista:54,lightWall:58,portal:68,
+  domain:21,shield:22,timeBlock:23,chains:24,presence:25,remote:34,duplicate:41,ghost:43,penetrate:53};
 for(const [id,ref] of Object.entries(extra)){
   const {nome,costo,tipo,gittata,effetto}=catalog[ref-1];
   cards[id]=[nome,costo,tipo+' · '+gittata,effetto];
@@ -92,32 +99,58 @@ const at=c=>units.find(u=>u.cell===c);
 const name=u=>labels[u.side]+' · '+u.type;
 const note=t=>log.unshift(t);
 const same=(a,b)=>a.every((v,i)=>v===b[i]);
+const distance=(a,b)=>xy(a).reduce((sum,n,i)=>sum+Math.abs(n-xy(b)[i]),0);
+const maxHp=u=>u.type==='Terra'?8:6;
+const near=(u,n)=>paths([u.cell],n,(a,b)=>passable(u,a,b)?1:Infinity);
+const unitSpells=['swap','corrode','substitute','push','exchange','contagion','terrify','spray','giant','stasis'];
+let serial,nextFirst,reactionsLocked,utilityReaction,origin;
+let creations;
+const edgeCreations=['wall','spiritWall','illusion','lightWall','portal'];
+const cellCreations=['cube','ballista'];
+const free=c=>!at(c)&&!creations.some(v=>v.cell===c);
 
 function start(){
+  borrowed=[];
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
   teams=[0,1].map(()=>{
     const deck=makeDeck();
     return {hand:deck.splice(0,6),deck,discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false};
   });
   const first=Math.random()<.5?0:1;
+  serial=0;nextFirst=null;reactionsLocked=false;utilityReaction=null;origin=null;
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
-  phase='setup'; mode='move'; barriers=[null,null]; log=[]; winner=null; pending=null;choice=null;
+  phase='setup'; mode='move'; barriers=[null,null]; creations=[]; log=[]; winner=null; pending=null;choice=null;
   show(first);
 }
 function show(side){
   viewer=side;
   render();
 }
-function obstacles(side){return barriers[1-side]?[...walls,barriers[1-side]]:walls;}
-function sight(c,target,side){return lineOfSight(center(c),target,obstacles(side));}
+function obstacles(side){
+  return [...walls,...barriers.filter((b,i)=>b&&i!==side),...creations.filter(v=>v.side!==side&&v.edge).map(v=>v.edge)];
+}
+function sight(c,target,side){
+  const boxes=creations.filter(v=>v.cell!==undefined&&v.side!==side).flatMap(v=>{
+    const [x,y]=xy(v.cell);
+    return [[x,y,x+1,y],[x+1,y,x+1,y+1],[x,y+1,x+1,y+1],[x,y,x,y+1]];
+  });
+  const from=origin&&origin.unit===active()&&active().cell===c&&active().side===side?origin.cell:c;
+  const start=center(from), blockers=[...obstacles(side),...boxes];
+  if(lineOfSight(start,target,blockers))return true;
+  if(!active().penetrate||active().side!==side||c!==active().cell)return false;
+  const [x,y]=target;
+  if((x!==start[0]&&y!==start[1])||(x===start[0]&&y===start[1]))return false;
+  const back=[x-Math.sign(x-start[0]),y-Math.sign(y-start[1])];
+  return !blocked([...start,...back],blockers);
+}
 function edgeSight(u,e){
-  const [x,y]=xy(u.cell);
+  const [x,y]=xy(origin?.unit===u?origin.cell:u.cell);
   return [[0,.5],[1,.5],[.5,0],[.5,1]].some(([dx,dy])=>
-    lineOfSight([x+dx,y+dy],mid(e),[...walls,...barriers.filter((b,i)=>b&&b!==e&&i!==u.side)]));
+    lineOfSight([x+dx,y+dy],mid(e),obstacles(u.side).filter(b=>b!==e)));
 }
 const has=(u,condition)=>Object.hasOwn(u.conditions,condition);
-const turn=()=>4*(round-1)+index;
+const turn=()=>serial;
 function clearCurses(){
   for(const u of units){
     if(u.cell!==null&&has(u,'Maledetto')&&neighbors(u.cell).some(c=>at(c)?.side===1-u.side))delete u.conditions.Maledetto;
@@ -127,50 +160,129 @@ function applyCondition(u,condition){
   if(condition&&u.cell!==null&&!has(u,condition))u.conditions[condition]=turn();
 }
 function walk(u,budget=u.pm){
-  return paths([u.cell],budget,(a,b)=>{
-    if(blocked([...center(a),...center(b)],obstacles(u.side)))return Infinity;
-    return at(b)?.side===1-u.side?2:1;
-  });
+  const step=(a,b)=>{
+    if(!passable(u,a,b))return Infinity;
+    return at(b)?.side===1-u.side||creations.some(v=>v.id==='cube'&&v.cell===a&&v.side!==u.side)?2:1;
+  };
+  const reach=paths([u.cell],budget,step);
+  if(u.ghost&&u===active()&&budget===u.pm){
+    for(const [a,before] of [...reach])for(const b of neighbors(a)){
+      if(passable(u,a,b))continue;
+      const cost=before.cost+(at(b)?.side===1-u.side?2:1);
+      if(cost>budget)continue;
+      for(const [c,after] of paths([b],budget-cost,step)){
+        const total=cost+after.cost;
+        if(total<(reach.get(c)?.cost??Infinity))reach.set(c,{cost:total,route:[...before.route,...after.route],ghost:true});
+      }
+    }
+  }
+  return reach;
+}
+function passable(u,a,b){
+  const e=edge(a,b);
+  if(wallBetween(a,b)&&!creations.some(v=>v.id==='portal'&&same(e,v.edge)))return false;
+  return !(barriers[1-u.side]&&same(e,barriers[1-u.side]));
 }
 function legalCells(){
   const u=active();
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
-  if(phase==='spawn')return respawn(zones[u.side],c=>!at(c));
+  if(phase==='spawn')return respawn(zones[u.side],free);
   if(phase==='dash')return [...walk(choice.unit,3).keys()].filter(c=>!at(c));
+  if(phase==='selection')return choice.positions??[];
   if(phase!=='action')return [];
-  if(mode==='move')return has(u,'Confuso')&&u.attacked?[]:[...walk(u).keys()].filter(c=>!at(c));
-  if(mode==='jump')return cells.filter(c=>!at(c)&&sight(u.cell,center(c),u.side));
+  if(mode==='move')return utilityReaction||origin?.required||(has(u,'Confuso')&&u.attacked)?[]:[...walk(u).keys()].filter(c=>!at(c));
+  if(mode==='jump')return cells.filter(c=>free(c)&&sight(u.cell,center(c),u.side));
+  if(mode==='leap')return cells.filter(c=>free(c)&&distance(c,u.cell)<=2);
+  if(cellCreations.includes(mode))return creationCells(u,mode);
+  if(mode==='dissolve'||mode==='relocate')return creations.filter(v=>v.cell!==undefined
+    && (mode==='relocate'?v.side===u.side:visibleCreation(u,v))).map(v=>v.cell);
   if(isAttack(mode)){
     const range=u.projection?cards[mode][2].replace('Tocco','Vista'):cards[mode][2];
-    const reach=mode==='ray'?paths([u.cell],3,(a,b)=>blocked([...center(a),...center(b)],obstacles(u.side))?Infinity:1):null;
-    return units.filter(v=>v.side!==u.side&&v.cell!==null
+    const reach=mode==='ray'?paths([origin?.unit===u?origin.cell:u.cell],3,(a,b)=>passable(u,a,b)?1:Infinity):null;
+    const unitTargets=units.filter(v=>v.side!==u.side&&v.cell!==null
       && !(round===1&&zones[v.side].includes(v.cell))
-      && (reach?reach.has(v.cell):range.endsWith('Tocco')
-        ?neighbors(u.cell).includes(v.cell)&&sight(u.cell,center(v.cell),u.side)
+      && !u.attackTargets.includes(v.id)
+      && (mode==='chargeAttack'?chargeDestinations(u,v).length>0:mode==='bounce'?!has(u,'Accecato')&&!has(v,'Invisibile')&&bouncedSight(u,v):reach?reach.has(v.cell):range.endsWith('Tocco')
+        ?distance(origin?.unit===u?origin.cell:u.cell,v.cell)===1&&sight(u.cell,center(v.cell),u.side)
         :!has(u,'Accecato')&&!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side))).map(v=>v.cell);
+    if(mode==='arc')unitTargets.push(...creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&distance(v.cell,u.cell)===1&&!wallBetween(v.cell,u.cell)).map(v=>v.cell));
+    return unitTargets;
   }
   if(afflictions[mode])return units.filter(v=>v.cell!==null&&v!==u&&
     (['frost','vertigo'].includes(mode)||(!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side)))).map(v=>v.cell);
+  if(unitSpells.includes(mode))return units.filter(v=>v.cell!==null&&v!==u
+    && (mode==='exchange'?v.side===u.side:['swap','push','substitute','stasis'].includes(mode)||v.side!==u.side)
+    && inRange(u,v,cards[mode][2])).map(v=>v.cell);
   return [];
 }
 function targets(){
   const u=active();
   if(phase!=='action')return [];
-  if(mode==='dissolve')return barriers.filter(e=>e&&edgeSight(u,e));
-  if(mode!=='wall')return [];
-  return cells.flatMap(c=>neighbors(c).filter(n=>n>c&&!wallBetween(c,n)).map(n=>edge(c,n)))
-    .filter(e=>!barriers.some(b=>b&&same(b,e))&&edgeSight(u,e));
+  if(mode==='dissolve')return [...barriers,...creations.map(v=>v.edge)].filter(e=>e&&edgeSight(u,e));
+  if(mode==='relocate')return [barriers[u.side],...creations.filter(v=>v.side===u.side).map(v=>v.edge)].filter(Boolean);
+  return edgeCreations.includes(mode)?creationEdges(u,mode):[];
+}
+function creationEdges(u,id){
+  return cells.flatMap(c=>neighbors(c).filter(n=>n>c&&wallBetween(c,n)===(id==='portal')).map(n=>edge(c,n)))
+    .filter(e=>![...barriers,...creations.map(v=>v.edge)].some(b=>b&&same(b,e))
+      && (id==='spiritWall'||(['lightWall','portal'].includes(id)
+        ?neighbors(u.cell).some(n=>same(e,edge(n,u.cell))):edgeSight(u,e))));
+}
+function visibleCreation(u,v){
+  const i=creations.indexOf(v);
+  creations.splice(i,1);
+  const visible=sight(u.cell,center(v.cell),u.side);
+  creations.splice(i,0,v);
+  return visible;
+}
+function creationCells(u,id){
+  return cells.filter(c=>free(c)&&(id==='cube'||(distance(c,u.cell)===1&&!wallBetween(c,u.cell)
+    && !units.some(v=>v.side!==u.side&&v.cell!==null&&sight(c,center(v.cell),u.side)))));
+}
+function putCreation(id,location){
+  const side=active().side;
+  if(id==='wall'){barriers[side]=location.edge;return;}
+  creations=creations.filter(v=>v.id!==id||v.side!==side);
+  creations.push({id,side,...location});
+}
+function selectCreation(location){
+  const u=active(),id=mode;
+  const e=location.edge;
+  const existing=creations.find(v=>e?v.edge===e:v.cell===location.cell);
+  const barrier=e?barriers.indexOf(e):-1;
+  if(id==='relocate'){
+    const kind=existing?.id??'wall';
+    if(e){
+      const places=creationEdges(u,kind).filter(v=>edgeSight(u,v));
+      choose('Scegli il nuovo confine',places.map(v=>['Confine '+v.join(', '),()=>{
+        if(cast(id)){putCreation(kind,{edge:v});resume();}
+      }]).concat([['Annulla',resume]]));
+    }else{
+      chooseCell('Scegli la nuova casella',creationCells(u,kind).filter(c=>sight(u.cell,center(c),u.side)),
+        c=>{if(cast(id))putCreation(kind,{cell:c});});
+    }
+    return;
+  }
+  if(!cast(id))return;
+  if(id==='dissolve'||id==='arc'){
+    if(barrier>=0)barriers[barrier]=null;
+    else creations=creations.filter(v=>v!==existing);
+    if(id==='arc'){u.attacked=true;u.attackTargets.push('ballista');}
+  }else putCreation(id,location);
+  resume();
 }
 function begin(){
   const u=active();
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
   mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
+  u.attackTargets=[];u.attackLimit=1;u.noAttack=false;reactionsLocked=false;
+  u.penetrate=false;u.ghost=false;origin=null;
   u.projection=false;
   u.moved=false;u.slowPenalty=has(u,'Rallentato')?2:0;u.pm-=u.slowPenalty;
   phase=u.cell===null?'spawn':'action';
   if(phase==='action'&&has(u,'Pietrificato'))phase='charge';
   ritualReady=phase==='action'&&canRitual();
-  show(u.side);
+  if(phase==='action')offerTimeBlock(u.side,()=>show(u.side));else show(u.side);
 }
 function canRitual(){
   const u=active();
@@ -187,7 +299,58 @@ function draw(side){
   }
   return false;
 }
-function discard(side,i){const t=teams[side];t.discard.push(...t.hand.splice(i,1));}
+let borrowed=[];
+function discard(side,i){
+  const t=teams[side];
+  const [id]=t.hand.splice(i,1);
+  const loan=borrowed.findIndex(v=>v.id===id&&v.holder===side);
+  const destination=loan<0?side:borrowed.splice(loan,1)[0].owner;
+  teams[destination].discard.push(id);
+}
+function inRange(u,v,category){
+  const range=u.projection?category.replace('Tocco','Vista'):category;
+  if(range.endsWith('Ovunque'))return true;
+  if(range.endsWith('Tocco'))return distance(origin?.unit===u?origin.cell:u.cell,v.cell)===1&&sight(u.cell,center(v.cell),u.side);
+  return !has(u,'Accecato')&&!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side);
+}
+function bouncedSight(u,v){
+  return sight(u.cell,center(v.cell),u.side)||cells.some(c=>sight(u.cell,center(c),u.side)&&sight(c,center(v.cell),u.side));
+}
+function chargeDestinations(u,v){
+  if(has(u,'Accecato')||!sight(u.cell,center(v.cell),u.side))return [];
+  const reach=near(u,Infinity);
+  return neighbors(v.cell).filter(c=>(c===u.cell||!at(c))&&reach.has(c)&&sight(c,center(v.cell),u.side));
+}
+function canAttack(u){return !u.noAttack&&u.attackTargets.length<u.attackLimit&&!(has(u,'Confuso')&&u.moved);}
+function choose(text,options,side=active().side,positions){
+  choice={text,options,positions};phase='selection';show(side);
+}
+function resume(){
+  choice=null;mode='move';if(phase!=='end')phase='action';clearCurses();show(active().side);
+}
+function chooseCell(text,positions,apply,done=resume,optional=true,side=active().side){
+  if(!positions.length){done();return;}
+  choose(text,optional?[['Salta',done]]:[],side,positions);
+  choice.apply=c=>{apply(c);done();};
+}
+function swapUnits(a,b,done=resume){
+  const apply=()=>{[a.cell,b.cell]=[b.cell,a.cell];done();};
+  const second=()=>{if(!offerReaction(b,'domain',done,apply))apply();};
+  if(!offerReaction(a,'domain',done,second))second();
+}
+function moveEffect(u,positions,done=resume,optional=true,side=active().side){
+  if(!positions.length){done();return;}
+  const select=()=>chooseCell('Sposta '+name(u),positions,c=>{u.cell=c;},done,optional,side);
+  if(!offerReaction(u,'domain',done,select))select();
+}
+function movementCells(u,n){return [...near(u,n).keys()].filter(c=>!at(c));}
+function chooseDiscard(side,n,done){
+  const hand=teams[side].hand;
+  if(!n||hand.length<=3){done();return;}
+  choose('Scegli una carta da scartare',orderedHand(hand).map(({label,i})=>[label,()=>{
+    discard(side,i);chooseDiscard(side,n-1,done);
+  }]),side);
+}
 function affordable(u,cost){const t=teams[u.side];return cost<=u.pe+Math.min(t.reserve,2-t.spent);}
 function pay(u,cost){
   const reserve=Math.max(0,cost-u.pe);
@@ -199,12 +362,51 @@ function pay(u,cost){
 }
 function cast(id){
   const u=active();
+  if(utilityReaction&&(utilityReaction.used||!cards[id][2].startsWith('Utilità')))return false;
+  const index=teams[u.side].hand.indexOf(id);
+  if(id!=='arc'&&index<0)return false;
   if(!pay(u,cards[id][1]))return false;
-  if(id!=='arc')discard(u.side,teams[u.side].hand.indexOf(id));
+  if(id!=='arc')discard(u.side,index);
   u.played.push(id);
   ritualReady=false;
   note(labels[u.side]+' lancia '+cards[id][0]+'.');
+  if(utilityReaction)utilityReaction.used=true;
+  if(origin)origin.consumed=true;
   return true;
+}
+function canReact(u,id){
+  const t=teams[u.side];
+  return !reactionsLocked&&!t.reaction&&t.hand.includes(id)&&affordable(u,cards[id][1]);
+}
+function offerReaction(u,id,apply,pass){
+  if(!canReact(u,id))return false;
+  choose('Reazione · '+name(u),[[cards[id][0],()=>{
+    if(!pay(u,cards[id][1]))return;
+    discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
+    note(name(u)+' usa '+cards[id][0]+'.');apply();
+  }],['Passa',pass]],u.side);
+  return true;
+}
+function offerTimeBlock(side,done){
+  const t=teams[1-side];
+  const candidates=units.filter(v=>v.side!==side&&v.cell!==null&&canReact(v,'timeBlock')&&
+    t.hand.some(id=>cards[id][2].startsWith('Utilità')&&cards[id][1]+1<=v.pe+Math.min(t.reserve,2-t.spent)));
+  if(!candidates.length){done();return;}
+  choose('Reazione nel Turno avversario',[
+    ...candidates.map(v=>['Blocco Temporale · '+name(v),()=>{
+      if(!pay(v,1))return;
+      discard(v.side,t.hand.indexOf('timeBlock'));t.reaction=true;
+      utilityReaction={order,index,done,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
+      order=[...order];order[index]=v.id;v.played=[];mode='move';phase='action';show(v.side);
+    }]),['Passa',done]],1-side);
+}
+function finishTimeBlock(){
+  const u=active(),saved=utilityReaction;
+  applyCondition(u,'Rallentato');u.played=saved.played;
+  ({order,index,ritualReady}=saved);reactionsLocked=saved.locked;
+  utilityReaction=null;origin=null;choice=null;mode=saved.turnMode;
+  if(phase!=='end')phase='action';
+  saved.done();
 }
 function victory(side){
   if(teams[side].kills>=2&&teams[side].ritual>=1){winner=side;phase='end';mode='move';return true;}
@@ -212,7 +414,7 @@ function victory(side){
 }
 function damage(u,amount){
   if(has(u,'Pietrificato'))return;
-  amount+=has(u,'Vulnerabile')?1:0;
+  amount+=has(u,'Vulnerabile')||creations.some(v=>v.id==='cube'&&v.side!==u.side&&v.cell===u.cell)?1:0;
   u.hp=Math.max(0,u.hp-amount);
   note(name(u)+' perde '+amount+' PF.');
   if(u.hp===0){
@@ -225,12 +427,105 @@ function damage(u,amount){
 function targetUnit(c){
   const id=mode,u=active(),defender=at(c);
   if(!cast(id))return;
-  if(isAttack(id))u.attacked=true;
+  if(isAttack(id)){u.attacked=true;u.attackTargets.push(defender.id);}
   pending={id,defender};
+  if(id==='chargeAttack'){
+    chooseCell('Scegli dove terminare la carica',chargeDestinations(u,defender),c=>{u.cell=c;u.moved=true;},offerVeto,false);
+    return;
+  }
+  offerVeto();
+}
+function movementReactions(u,from,to,done){
+  const enemies=units.filter(v=>v.side!==u.side&&v.cell!==null);
+  const options=[];
+  for(const v of enemies){
+    const was=distance(v.cell,from)===1,now=distance(v.cell,to)===1;
+    if(!was&&now&&canReact(v,'shield')){
+      options.push([v,'shield',()=>moveEffect(u,movementCells(u,2).filter(c=>distance(c,v.cell)>distance(to,v.cell)),done,true,v.side)]);
+    }
+    if(was&&!now&&canReact(v,'chains')&&!at(from)){
+      options.push([v,'chains',()=>{u.cell=from;u.pm=Math.max(0,u.pm-2);done();}]);
+    }
+    const firstSight=!sight(v.cell,center(from),v.side)&&sight(v.cell,center(to),v.side)
+      &&v.sawTurn!==turn();
+    if(firstSight){
+      v.sawTurn=turn();
+      if(canReact(v,'presence'))options.push([v,'presence',()=>{u.pm=Math.max(0,u.pm-2);done();}]);
+    }
+  }
+  if(!options.length){done();return;}
+  choose('Reazione al movimento',[
+    ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v),()=>{
+      if(!pay(v,cards[id][1]))return;
+      discard(v.side,teams[v.side].hand.indexOf(id));teams[v.side].reaction=true;apply();
+    }]),['Passa',done]],1-u.side);
+}
+function offerVeto(){
+  const {defender}=pending;
   const t=teams[defender.side];
-  if(t.hand.includes('veto')&&!t.reaction&&affordable(defender,3)){
+  if(!reactionsLocked&&t.hand.includes('veto')&&!t.reaction&&affordable(defender,3)){
     phase='reaction';mode='move';show(defender.side);
   }else resolve(false);
+}
+function additionalEffect(id,u,v){
+  const live=v.cell!==null;
+  if(id==='wave'&&live){moveEffect(v,movementCells(v,3));return true;}
+  if(id==='fist'&&live){moveEffect(v,cells.filter(c=>!at(c)&&distance(v.cell,c)<=2));return true;}
+  if(id==='shard'&&live){
+    const select=left=>choose('Scegli '+(left.length===4?'la prima':'la seconda')+' Condizione',left.map(c=>[c,()=>{
+      applyCondition(v,c);if(left.length===4)select(left.filter(x=>x!==c));else resume();
+    }]));
+    select(['Confuso','Vulnerabile','Accecato','Rallentato']);return true;
+  }
+  if(id==='necrotic'||id==='corrode'){chooseDiscard(v.side,2,resume);return true;}
+  if(id==='fireball'&&live){
+    const other=units.filter(w=>w!==v&&w.side===v.side&&w.cell!==null&&near(v,3).has(w.cell));
+    choose('Scegli il secondo bersaglio',[...other.map(w=>[name(w),()=>{damage(w,1);resume();}]),['Continua',resume]]);
+    return true;
+  }
+  if(id==='raid'){
+    const t=teams[v.side];
+    choose('Scegli una carta da prendere',[...orderedHand(t.hand).map(({label,i})=>[label,()=>{
+      const [id]=t.hand.splice(i,1);
+      const loan=borrowed.findIndex(item=>item.holder===v.side&&item.id===id);
+      if(loan>=0)borrowed.splice(loan,1);else borrowed.push({id,holder:u.side,owner:v.side});
+      teams[u.side].hand.push(id);resume();
+    }]),...(!t.hand.length?[['Continua',resume]]:[])]);
+    return true;
+  }
+  if(id==='swap'&&live){
+    const positions=units.filter(w=>w!==v&&w.cell!==null&&inRange(u,w,cards[id][2])).map(w=>w.cell);
+    if(!positions.length){resume();return true;}
+    choose('Scegli il secondo Simulacro',[],u.side,positions);
+    choice.apply=c=>swapUnits(v,at(c));return true;
+  }
+  if(id==='substitute'&&live){applyCondition(v,'Rallentato');swapUnits(u,v);return true;}
+  if(id==='push'&&live){moveEffect(v,movementCells(v,2));return true;}
+  if(id==='terrify'&&live){
+    applyCondition(v,'Rallentato');
+    moveEffect(v,movementCells(v,2).filter(c=>distance(c,u.cell)>distance(v.cell,u.cell)));return true;
+  }
+  if(id==='giant'&&live){
+    const reach=near(v,Infinity);
+    const adjacent=neighbors(u.cell).filter(c=>!at(c)&&reach.has(c)&&sight(u.cell,center(c),u.side));
+    const min=Math.min(...adjacent.map(c=>reach.get(c).cost));
+    moveEffect(v,adjacent.filter(c=>reach.get(c).cost===min),resume,false);return true;
+  }
+  if(id==='spray'){applyCondition(v,'Vulnerabile');applyCondition(v,'Rallentato');applyCondition(u,'Vulnerabile');}
+  if(id==='stasis')reactionsLocked=true;
+  if(id==='contagion'){
+    choose('Scegli una Condizione da trasferire',[...Object.keys(u.conditions).filter(c=>c!=='Maledetto').map(c=>[c,()=>{
+      delete u.conditions[c];applyCondition(v,c);resume();
+    }]),['Continua',resume]]);return true;
+  }
+  if(id==='exchange'){
+    const options=[];
+    for(const [from,to] of [[u,v],[v,u]])for(let n=1;n<=Math.min(2,from.hp-1,maxHp(to)-to.hp);n++){
+      options.push([n+' PF da '+name(from)+' a '+name(to),()=>{from.hp-=n;to.hp+=n;resume();}]);
+    }
+    choose('Scegli come scambiare i PF',[...options,['Continua',resume]]);return true;
+  }
+  return false;
 }
 function resolve(veto){
   const {id,defender}=pending,u=active();
@@ -255,15 +550,19 @@ function resolve(veto){
   if(phase!=='end'){
     if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
-    const t=teams[defender.side];
-    if(!veto&&defender.cell!==null&&defender.hp<before&&!t.reaction&&t.hand.includes('dash')&&affordable(defender,1)){
-      choice={unit:defender,resume:mode};phase='afterDamage';show(defender.side);return;
+    if(!veto){
+      const continueEffect=()=>{if(!additionalEffect(id,u,defender))show(u.side);};
+      if(defender.cell!==null&&defender.hp<before&&canReact(defender,'dash')){
+        choice={unit:defender,resume:mode,done:continueEffect};phase='afterDamage';show(defender.side);return;
+      }
+      continueEffect();return;
     }
   }
   show(u.side);
 }
 function finishDash(){
-  mode=choice.resume;phase='action';choice=null;show(active().side);
+  const {resume:next,done}=choice;
+  mode=next;phase='action';choice=null;done();
 }
 function reactDash(){
   const u=choice.unit,t=teams[u.side];
@@ -275,6 +574,10 @@ function reactDash(){
 function selectCell(c){
   if(!legalCells().includes(c))return;
   const u=active();
+  if(phase==='selection'){choice.apply(c);return;}
+  if(phase==='action'&&(cellCreations.includes(mode)||mode==='relocate'||mode==='dissolve'||(mode==='arc'&&!at(c)))){
+    selectCreation({cell:c});return;
+  }
   if(phase==='dash'){
     choice.unit.cell=c;clearCurses();finishDash();return;
   }
@@ -285,12 +588,43 @@ function selectCell(c){
   }
   if(phase==='spawn'){
     u.cell=c;u.hp=u.type==='Terra'?8:6;u.pe=4;phase='action';ritualReady=canRitual();
-  }else if(isAttack(mode)||afflictions[mode]){targetUnit(c);return;}
+  }else if(isAttack(mode)||afflictions[mode]||unitSpells.includes(mode)){targetUnit(c);return;}
+  else if(mode==='leap'){
+    if(!cast('leap'))return;
+    u.cell=c;u.noAttack=true;mode='move';
+  }
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
-    u.cell=c;u.pm-=route.cost;ritualReady=false;u.moved=true;
+    u.pm-=route.cost;ritualReady=false;u.moved=true;
+    if(route.ghost)u.ghost=false;
     note(name(u)+' si muove · '+route.cost+' PM.');
+    const finish=()=>{
+      choice=null;clearCurses();
+      if(phase==='end'){render();return;}
+      if(u.cell===null){charge();return;}
+      phase='action';offerTimeBlock(u.side,()=>show(u.side));
+    };
+    const step=i=>{
+      if(i>=route.route.length||u.cell===null||phase==='end'){finish();return;}
+      const from=u.cell,destination=route.route[i],crossing=edge(from,destination);
+      const visible=creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&!sight(v.cell,center(u.cell),v.side));
+      u.cell=destination;
+      for(const v of [...creations]){
+        if(u.cell===null||phase==='end')break;
+        if(v.side===u.side)continue;
+        if(v.edge&&same(crossing,v.edge)){
+          if(v.id==='illusion')u.noAttack=true;
+          if(v.id==='lightWall'){creations=creations.filter(w=>w!==v);damage(u,1);applyCondition(u,'Accecato');}
+        }
+        if(visible.includes(v)&&v.fired!==turn()&&sight(v.cell,center(destination),v.side)){
+          v.fired=turn();damage(u,1);
+        }
+      }
+      if(u.cell===null||phase==='end'){finish();return;}
+      movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
+    };
+    step(1);return;
   }
   clearCurses();render();
 }
@@ -303,14 +637,18 @@ function advance(){
   while(t.hand.length<6&&(t.deck.length||t.discard.length))draw(u.side);
   u.pe=4;u.pm=0;
   clearCurses();
-  if(has(u,'Maledetto')&&u.conditions.Maledetto<turn()){
+  if(u.cell!==null&&has(u,'Maledetto')&&u.conditions.Maledetto<turn()){
     damage(u,1);
     if(phase==='end'){render();return;}
   }
   for(const [condition,applied] of Object.entries(u.conditions)){
     if(condition!=='Maledetto'&&applied<turn())delete u.conditions[condition];
   }
-  index=(index+1)%4;if(index===0)round++;
+  index=(index+1)%4;serial++;
+  if(index===0){
+    round++;
+    if(nextFirst!==null){order=[nextFirst,1-nextFirst,nextFirst+2,3-nextFirst];nextFirst=null;}
+  }
   begin();
 }
 function ritualAction(){
@@ -321,6 +659,40 @@ function ritualAction(){
 }
 function pick(id){
   const u=active(),t=teams[u.side];
+  if(['remote','duplicate','ghost','penetrate'].includes(id)){
+    if(utilityReaction&&['remote','duplicate'].includes(id))return;
+    const ally=units.find(v=>v!==u&&v.side===u.side);
+    if(id==='remote'&&ally.cell===null)return;
+    if(!cast(id))return;
+    if(id==='ghost'){u.ghost=true;u.noAttack=true;resume();}
+    if(id==='penetrate'){u.penetrate=true;resume();}
+    if(id==='remote'){origin={unit:u,cell:ally.cell,required:true};resume();}
+    if(id==='duplicate'){
+      chooseCell('Scegli l’origine del prossimo incantesimo',[...near(u,2).keys()],c=>{origin={unit:u,cell:c};});
+    }
+    return;
+  }
+  if(['frenzy','inversion','karmic','vortex'].includes(id)){
+    const ally=units.find(v=>v!==u&&v.side===u.side);
+    if(id==='inversion'&&(t.ritual||ally.cell===null))return;
+    if(!cast(id))return;
+    if(id==='frenzy')u.attackLimit=2;
+    if(id==='inversion'){swapUnits(u,ally);return;}
+    if(id==='karmic'){
+      if(order[0]===u.side){draw(u.side);draw(u.side);}
+      else{nextFirst=u.side;damage(u,1);}
+    }
+    if(id==='vortex'){
+      const next=remaining=>{
+        if(!remaining.length){resume();return;}
+        choose('Scegli quale Simulacro spostare',remaining.map(v=>[name(v),()=>{
+          moveEffect(v,movementCells(v,1),()=>next(remaining.filter(w=>w!==v)));
+        }]));
+      };
+      next(units.filter(v=>v.cell!==null));return;
+    }
+    resume();return;
+  }
   if(id==='projection'){
     if(cast(id)){u.projection=true;mode='move';render();}
     return;
@@ -379,6 +751,8 @@ function line(e,cls,fn,tip){
   return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
 }
 function render(){
+  if(origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
+  if(utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
   actions.length=0;
   const u=active(),t=teams[u.side];
   const visible=viewer!==null;
@@ -388,36 +762,39 @@ function render(){
   const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.',dissolve:'Scegli una Creazione visibile.'}[mode]??'Scegli un Simulacro evidenziato.',charge:'Scarta una carta se vuoi, poi ricarica.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
   let board=cells.map(c=>{
     const token=at(c);
+    const object=creations.find(v=>v.cell===c);
     const z=zones[0].includes(c)?'redzone':zones[1].includes(c)?'bluezone':ritual.includes(c)?'ritual':'';
     const [x,y]=xy(c),legal=valid.includes(c);
     const cost=legal?movement?.get(c).cost:null;
     const tip=[
       token&&[name(token)+' · '+token.hp+' PF · '+token.pe+' PE. Attraversare un nemico costa 2 PM. La pedina non blocca la vista.',
         ...Object.keys(token.conditions).map(k=>k+' · '+conditions[k])].join('\n'),
+      object&&cards[object.id][0]+' · '+labels[object.side]+'. '+cards[object.id][3],
       z==='ritual'&&'Zona Rituale. Inizia qui la Fase di Azione senza nemici adiacenti per poter compiere il Rituale.',
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
     return button((z?'<span class="mark">'+(z==='ritual'?'◇':'•')+'</span>':'')+
-      (token?'<span class="token '+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
+      (token?'<span class="token '+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+'">'+(token.type==='Terra'?'▲':'ϟ')+'</span>':object?'<span class="creation">'+(object.id==='cube'?'▣':'➶')+'</span>':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
       ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
   barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
-  if(visible)board+=targets().map(e=>line(e,'edge target',()=>{
-    if(mode==='wall'&&cast('wall')){barriers[u.side]=e;mode='move';render();}
-    else if(mode==='dissolve'&&cast('dissolve')){barriers[barriers.indexOf(e)]=null;mode='move';render();}
-  },mode==='wall'?'Crea Barriera di Forza qui.':'Dissolvi questa Barriera di Forza.')).join('');
+  creations.filter(v=>v.edge).forEach(v=>{board+=line(v.edge,'edge barrier '+(v.side?'blue':''),null,cards[v.id][0]+'. '+cards[v.id][3]);});
+  if(visible)board+=targets().map(e=>line(e,'edge target',()=>selectCreation({edge:e}),cards[mode][0])).join('');
   let controls='',hand='';
-  if(visible&&phase==='action'&&mode!=='jump'){
+  if(visible&&phase==='action'&&mode!=='jump'&&!utilityReaction&&!origin?.required){
     controls=button('Muovi',()=>pick('move'),true,mode==='move'?'selected':'')
-      +button('Colpo Arcano',()=>pick('arc'),!u.attacked&&!(has(u,'Confuso')&&u.moved),mode==='arc'?'selected':'')
+      +button('Colpo Arcano',()=>pick('arc'),canAttack(u)&&!u.played.includes('arc'),mode==='arc'?'selected':'')
       +button('Rituale',ritualAction,ritualReady&&canRitual())
       +button('Caricamento',charge);
   }
+  if(visible&&phase==='action'&&utilityReaction&&!utilityReaction.used)controls=button('Termina Reazione',finishTimeBlock);
+  if(visible&&phase==='action'&&origin?.required&&!origin.consumed)controls=button('Rinuncia al secondo incantesimo',()=>{origin=null;resume();});
   if(visible&&phase==='charge')controls=button('Ricarica e termina',advance,t.hand.length<=6);
   if(visible&&phase==='reaction')controls=button('Veto Arcano · 3 PE',()=>resolve(true))+button('Passa',()=>resolve(false));
   if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · 1 PE',reactDash)+button('Passa',finishDash);
   if(visible&&phase==='dash')controls=button('Resta qui',finishDash);
+  if(visible&&phase==='selection')controls=choice.options.map(([label,fn])=>button(label,fn)).join('');
   if(visible&&phase==='choice'){
     controls=choice.options.map(option=>{
       if(choice.id==='oracle')return ['cima','fondo'].map(where=>button(cards[t.hand[option]][0]+' · '+where,()=>{
@@ -446,7 +823,8 @@ function render(){
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
       const playable=phase==='action'&&mode!=='jump'&&type!=='Reazione'&&affordable(u,cost)&&!u.played.includes(id)
-        && !(range==='Vista'&&has(u,'Accecato'))&&!(isAttack(id)&&(u.attacked||(has(u,'Confuso')&&u.moved)));
+        && (!utilityReaction||(type==='Utilità'&&!utilityReaction.used&&!['remote','duplicate'].includes(id)))
+        && !(range==='Vista'&&has(u,'Accecato'))&&(!isAttack(id)||canAttack(u));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+range+'</small>',()=>{
@@ -464,12 +842,12 @@ function render(){
   }
   const turnBar=document.querySelector('#turn');
   turnBar.className=viewer?'turn-blue':'turn-red';
-  const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):null;
+  const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   turnBar.textContent='Round '+round+' · '+(choiceTitle??(phase==='refill'?'Caricamento · '+name(u):title));
   const historyOpen=root.querySelector('details')?.open;
   root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
     (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'')+
-    '<p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+(prompt??'Riporta la mano a sei carte e termina il Turno.')+'</p><div class="actions">'+controls+'</div>'+
+    '<p class="key">▲ Terra · ϟ Fulmine · ◇ Zona Rituale · • Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+(choice?.text??prompt??'Completa la scelta o termina il Turno.')+'</p><div class="actions">'+controls+'</div>'+
     teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<div class="stats">'+k.type+' · '+k.hp+' PF · '+k.pe+' PE'+(k===u&&phase!=='setup'?' · '+k.pm+' PM':'')+'</div>').join('')+'</div>').join('')+
     (hand?'<div id="card-detail" class="card-detail"></div>':'')+
     (log.length?'<p class="muted">'+log[0]+'</p><details '+(historyOpen?'open':'')+'><summary>Registro</summary><ul class="log">'+log.slice(0,15).map(l=>'<li>'+l+'</li>').join('')+'</ul></details>':'')+'</aside></div>';
