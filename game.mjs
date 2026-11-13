@@ -932,4 +932,21 @@ root.addEventListener('click',event=>{
   if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
 });
 document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova partita?'))start();};
-start();
+const titleScreen=document.querySelector('#title-screen');
+const matchHeader=document.querySelector('#match-header');
+const startLocal=document.querySelector('#start-local');
+startLocal.onclick=()=>{
+  start();
+  titleScreen.hidden=true;
+  matchHeader.hidden=false;
+  root.hidden=false;
+  document.querySelector('#turn').focus();
+};
+document.querySelector('#main-menu').onclick=()=>{
+  if(phase!=='end'&&!confirm('Tornare al menu principale? La partita in corso terminerà.'))return;
+  matchHeader.hidden=true;
+  root.hidden=true;
+  root.replaceChildren();
+  titleScreen.hidden=false;
+  startLocal.focus();
+};

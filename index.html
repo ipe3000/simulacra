@@ -2,9 +2,44 @@
 <html lang="it">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Simulacra · Il Labirinto Antico</title>
-<link rel="stylesheet" href="./style.css?v=4">
-<header><h1>Simulacra</h1><div id="turn" role="status"></div><button id="reset">Nuova partita</button></header>
-<main id="game"></main>
-<script type="module" src="./game.mjs?v=5"></script>
+<title>Simulacra · Nel Labirinto Antico</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
+<link rel="stylesheet" href="./style.css?v=5">
+<main id="title-screen" aria-labelledby="game-title">
+  <div class="title-brand">
+    <div class="title-seal" aria-hidden="true">
+      <span class="seal-spark"></span>
+      <span class="seal-spark"></span>
+      <span class="seal-spark"></span>
+      <span class="seal-spark"></span>
+      <span class="seal-spark"></span>
+    </div>
+    <h1 id="game-title">Simulacra</h1>
+    <p class="title-subtitle">Nel Labirinto Antico</p>
+  </div>
+  <ul class="title-cast" aria-label="I quattro Simulacri">
+    <li><img src="./sprites/mage-0-earth.png" alt="Simulacro di Terra rosso"></li>
+    <li><img src="./sprites/mage-0-lightning.png" alt="Simulacro di Fulmine rosso"></li>
+    <li><img src="./sprites/mage-1-earth.png" alt="Simulacro di Terra blu"></li>
+    <li><img src="./sprites/mage-1-lightning.png" alt="Simulacro di Fulmine blu"></li>
+  </ul>
+  <nav class="title-menu" aria-label="Modalità di gioco">
+    <button id="start-local" type="button">
+      <span>Giocatore vs Giocatore</span><span class="title-menu-aside" aria-hidden="true">→</span>
+      <small>Due giocatori sullo stesso dispositivo</small>
+    </button>
+    <button type="button" disabled>
+      <span>Giocatore vs Computer</span><small class="title-menu-aside">In arrivo</small>
+      <small>Affronta il computer in solitaria</small>
+    </button>
+  </nav>
+</main>
+<header id="match-header" hidden>
+  <h1>Simulacra</h1>
+  <div id="turn" role="status" tabindex="-1"></div>
+  <button id="reset" type="button">Nuova partita</button>
+  <button id="main-menu" type="button">Menu principale</button>
+</header>
+<main id="game" hidden></main>
+<script type="module" src="./game.mjs?v=6"></script>
 </html>

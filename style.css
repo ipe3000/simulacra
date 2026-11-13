@@ -1,4 +1,5 @@
 :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#171819;color:#efeadc;--gold:#d8bc81;--border:#42413c}
+[hidden]{display:none!important}
 *{box-sizing:border-box}body{margin:0}header,main{max-width:1330px;margin:auto;padding:20px 30px}header{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 h1,h2,h3,p{margin:0}h1,h2{font-family:Georgia,serif}h1{font-size:42px;font-weight:normal;letter-spacing:.06em}.eyebrow{font-size:11px;letter-spacing:.16em;color:var(--gold)}
 button{font:inherit;color:inherit;border:1px solid var(--border);background:#292a29;border-radius:6px;padding:8px 12px;cursor:pointer}button:hover:not(:disabled),button:focus-visible{border-color:var(--gold)}button:disabled{opacity:.45;cursor:default}.selected{border-color:var(--gold);color:var(--gold)}
@@ -98,3 +99,118 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .discard-card{display:grid;grid-template-rows:1fr auto;gap:4px;flex:1 0 104px;min-width:104px}
 .discard-card .card{width:100%;margin-inline-start:0}
 .discard-button{padding:4px 6px;font-size:12px}
+
+/* Title screen */
+#title-screen {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-height: 100dvh;
+  max-width: none;
+  padding: 32px clamp(12px, 5vw, 56px);
+  background: radial-gradient(ellipse at 50% 32%, #2c251d, #171614 66%);
+}
+.title-brand {
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  width: min(100%, 880px);
+  padding-top: 12px;
+  display: grid;
+  align-content: center;
+  text-align: center;
+}
+#game-title {
+  color: #ead7b1;
+  font: 500 clamp(24px, 10cqw, 96px)/1.12 Cinzel, Georgia, serif;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  text-shadow: 0 2px #100e0b, 0 0 24px #c09b6977;
+}
+.title-subtitle {
+  margin-top: 12px;
+  color: #d7c6a9;
+  font: 500 clamp(10px, 2.2cqw, 14px)/1.5 Cinzel, Georgia, serif;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.title-seal {
+  position: relative;
+  pointer-events: none;
+  margin: 0 auto 18px;
+  width: clamp(112px, 24vw, 190px);
+  aspect-ratio: 1;
+
+  border: 1px solid #ad88cb;
+  border-radius: 50%;
+  background: radial-gradient(circle, #9870b84a, #77519a29 49%, transparent 73%);
+  box-shadow: 0 0 24px #9a6dca45, inset 0 0 18px #a27cbe39;
+}
+.title-seal::before,
+.title-seal::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 1px solid #b19bcc8c;
+}
+.title-seal::before { border-radius: 50%; }
+.title-seal::after { inset: 17%; transform: rotate(45deg); }
+.seal-spark {
+  position: absolute;
+  width: 5px;
+  aspect-ratio: 1;
+  background: #e0c7f1;
+  box-shadow: 0 0 10px 2px #b487e6b3;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.seal-spark:nth-child(1) { left: 50%; top: 0; }
+.seal-spark:nth-child(2) { left: 14%; top: 15%; }
+.seal-spark:nth-child(3) { left: 86%; top: 15%; }
+.seal-spark:nth-child(4) { left: 8%; top: 77%; }
+.seal-spark:nth-child(5) { left: 92%; top: 77%; }
+.title-cast {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, 4vw, 36px);
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+.title-cast li {
+  display: grid;
+  place-items: center;
+  width: clamp(39px, 9vw, 70px);
+  aspect-ratio: 1;
+  background: radial-gradient(ellipse at 50% 74%, #9a7a474d, transparent 70%);
+  border-bottom: 1px solid #8d73497a;
+}
+.title-cast img {
+  display: block;
+  width: 83%;
+  height: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 3px #0a0908b3);
+}
+.title-menu {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 360px);
+}
+.title-menu button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px 8px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #efeadc;
+  background: #231d18;
+  border: 1px solid #7e694b;
+  border-radius: 2px;
+}
+.title-menu button:hover:not(:disabled),
+.title-menu button:focus-visible { background: #3b2d20; border-color: var(--gold); }
+.title-menu button:disabled { opacity: 1; color: #c2b39a; border-color: #56493a; }
+.title-menu small { color: #c2b39a; }
+.title-menu-aside { grid-column: 2; grid-row: 1 / span 2; color: var(--gold); }
+#match-header { flex-wrap: wrap; }
