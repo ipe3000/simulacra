@@ -95,6 +95,7 @@ function shuffle(deck){
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
 let controllers=[null,null], matchMode='local', botTimer, paused=true, botStopped=false;
+let movementTimer, animatingMovement=false;
 const spectatorControls=document.querySelector('#spectator-controls');
 const toggleComputers=document.querySelector('#toggle-computers');
 const stepComputers=document.querySelector('#step-computers');
@@ -117,6 +118,7 @@ const free=c=>!at(c)&&!creations.some(v=>v.cell===c);
 
 function start(){
   clearTimeout(botTimer);
+  cancelMovementAnimation();
   paused=true;botStopped=false;
   borrowed=[];
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
@@ -636,10 +638,24 @@ function traverse(u,route,done,spendPm=false){
         v.fired=turn();damage(u,1);
       }
     }
-    if(u.cell===null||phase==='end'){finish();return;}
-    movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
+    const continueMovement=()=>{
+      if(u.cell===null||phase==='end'){finish();return;}
+      movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
+    };
+    if(!controllers[u.side]){continueMovement();return;}
+    animatingMovement=true;
+    render();
+    const delay=matchMode==='spectator'?Math.max(100,Number(computerSpeed.value)*.48):240;
+    movementTimer=setTimeout(()=>{
+      animatingMovement=false;
+      continueMovement();
+    },delay);
   };
   step(1);
+}
+function cancelMovementAnimation(){
+  clearTimeout(movementTimer);
+  animatingMovement=false;
 }
 function finishDash(){
   const {resume:next,done}=choice;
@@ -849,7 +865,7 @@ function cardChoice(option,where){
 }
 
 function computerTurn(){
-  if(phase==='end'||botStopped||!controllers[viewer])return;
+  if(phase==='end'||botStopped||animatingMovement||!controllers[viewer])return;
   const side=viewer, level=controllers[side], u=active(), t=teams[side];
   const unit=phase==='setup'?units[setup[0]]:phase==='dash'||phase==='afterDamage'?choice.unit:choice?.moving??u;
   const hand=orderedHand(t.hand);
@@ -977,8 +993,8 @@ function scheduleComputer(){
   toggleComputers.textContent=paused?'Avvia':'Pausa';
   const finished=phase==='end'||botStopped;
   toggleComputers.disabled=finished;
-  stepComputers.disabled=finished||!paused;
-  if(finished||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
+  stepComputers.disabled=finished||!paused||animatingMovement;
+  if(finished||animatingMovement||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
   botTimer=setTimeout(computerTurn,matchMode==='spectator'?Number(computerSpeed.value):320);
 }
 const actions=[];
@@ -997,12 +1013,12 @@ function line(e,cls,fn,tip){
   return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
 }
 function render(){
-  if(origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
-  if(utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
+  if(!animatingMovement&&origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
+  if(!animatingMovement&&utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
   actions.length=0;
   const u=active(),t=teams[u.side];
   const automated=Boolean(controllers[viewer]);
-  const visible=viewer!==null&&!automated;
+  const visible=viewer!==null&&!automated&&!animatingMovement;
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
   const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
@@ -1084,7 +1100,8 @@ function render(){
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
   turnBar.textContent='Round '+round+' · '+(automated&&phase!=='end'?publicTitle:choiceTitle??title);
-  const instruction=botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
+  const instruction=animatingMovement?'Movimento in corso.'
+    :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
     :choice?.text??prompt??'Completa la scelta o termina il Turno.';
   const historyOpen=root.querySelector('details')?.open;
@@ -1178,6 +1195,7 @@ computerSpeed.onchange=scheduleComputer;
 document.querySelector('#main-menu').onclick=()=>{
   if(phase!=='end'&&!confirm('Tornare al menu principale? La partita in corso terminerà.'))return;
   clearTimeout(botTimer);
+  cancelMovementAnimation();
   matchHeader.hidden=true;
   root.hidden=true;
   root.replaceChildren();
