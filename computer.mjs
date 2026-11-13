@@ -150,11 +150,12 @@ function score(action,state){
   return (utility[card]??-.75)-expense;
 }
 
-export function chooseComputerAction(actions,state,random=Math.random){
+export function chooseComputerAction(actions,state,random=Math.random,record){
   let best=null,bestScore=-Infinity;
   for(const action of actions){
     const noise=state.level==='easy'?random()*.9:0;
     const value=score(action,state)+noise;
+    record?.(action,value);
     if(value>bestScore){best=action;bestScore=value;}
   }
   return best;

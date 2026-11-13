@@ -1,6 +1,6 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 import catalog from './catalogo-carte.json' with {type:'json'};
-import {chooseComputerAction} from './computer.mjs';
+import {chooseComputerAction} from './computer.mjs?v=2';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -104,7 +104,11 @@ let units,teams,order,index,round,setup,viewer,phase,mode,barriers,log,winner,ri
 const active=()=>units[order[index]];
 const at=c=>units.find(u=>u.cell===c);
 const name=u=>labels[u.side]+' · '+u.type;
-const note=t=>log.unshift(t);
+let analysisLog=[];
+const note=t=>{
+  log.unshift(t);
+  if(matchMode!=='local')analysisLog.push('  '+t);
+};
 const same=(a,b)=>a.every((v,i)=>v===b[i]);
 const distance=(a,b)=>xy(a).reduce((sum,n,i)=>sum+Math.abs(n-xy(b)[i]),0);
 const maxHp=u=>u.type==='Terra'?8:6;
@@ -119,7 +123,12 @@ const free=c=>!at(c)&&!creations.some(v=>v.cell===c);
 function start(){
   clearTimeout(botTimer);
   cancelMovementAnimation();
+  logExport.hidden=true;
+  copyMatchLog.textContent='Copia registro partita';
   paused=true;botStopped=false;
+  const levels={easy:'Facile',normal:'Normale',hard:'Difficile'};
+  analysisLog=['Simulacra | '+(matchMode==='solo'?'Giocatore vs Computer':'Computer vs Computer'),
+    ...labels.map((label,side)=>label+' · '+(levels[controllers[side]]??'Umano'))];
   borrowed=[];
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
   teams=[0,1].map(()=>{
@@ -608,9 +617,14 @@ function resolve(veto){
 }
 function traverse(u,route,done,spendPm=false){
   let lastFree=u.cell,spent=0;
+  const visited=[u.cell];
   const occupied=c=>units.some(v=>v!==u&&v.cell===c);
   const finish=()=>{
     if(u.cell!==null&&occupied(u.cell))u.cell=lastFree;
+    if(matchMode!=='local'&&visited.length>1){
+      analysisLog.push('  '+name(u)+' · Percorso effettivo: '+visited.map(cellLabel).join(' → ')+
+        (u.cell===visited.at(-1)?'':' · Fine: '+cellLabel(u.cell))+(spendPm?' · '+spent+' PM':''));
+    }
     done(spent);
   };
   const step=i=>{
@@ -626,6 +640,7 @@ function traverse(u,route,done,spendPm=false){
     }
     const visible=creations.filter(v=>v.id==='ballista'&&v.side!==u.side&&!sight(v.cell,center(from),v.side,{ignored:v}));
     u.cell=destination;
+    visited.push(destination);
     if(!occupied(destination))lastFree=destination;
     for(const v of [...creations]){
       if(u.cell===null||phase==='end')break;
@@ -975,11 +990,42 @@ function computerTurn(){
   },opponent:{
     kills:teams[enemy].kills,ritual:teams[enemy].ritual,reserve:teams[enemy].reserve,reaction:teams[enemy].reaction,
   },foes,creations,position,followUp,currentAttack,cards,attacks,afflictions};
-  const action=chooseComputerAction(actions,state);
-  if(action)action.run();
+  const scored=[];
+  const action=chooseComputerAction(actions,state,Math.random,(candidate,value)=>scored.push({candidate,value}));
+  if(action){
+    recordComputerDecision(side,unit,action,scored);
+    action.run();
+  }
   else{
     botStopped=true;paused=true;render();
   }
+}
+
+function cellLabel(cell){
+  if(cell===null)return 'fuori plancia';
+  const [x,y]=xy(cell);
+  return '('+(x+1)+','+(y+1)+')';
+}
+
+function describeDecision(action){
+  const {kind,card,cell,edge,label,target}=action;
+  const names={move:'Muovi',jump:'Teletrasporto',end:'Caricamento / fine fase',
+    ritual:'Rituale',skip:'Passa / continua',discard:'Scarta',take:'Scegli carta avversaria',
+    oracle:'Oracolo',cleanse:'Rimuovi Condizione',radiance:'Acceca',destroy:'Distruggi barriera'};
+  return [names[kind],cards[card]?.[0]??names[card],typeof label==='string'?label:undefined,
+    target?name(target):undefined,cell!==undefined?cellLabel(cell):undefined,
+    edge?'confine '+edge.join(','):undefined,action.where].filter(Boolean).join(' · ')||'Scegli casella';
+}
+
+function recordComputerDecision(side,unit,action,scored){
+  const stages={setup:'Evocazione',spawn:'Rinascita',action:'Azione',charge:'Caricamento',
+    reaction:'Reazione',afterDamage:'Reazione al danno',dash:'Scatto',selection:'Scelta',choice:'Effetto',probe:'Sonda Telepatica'};
+  const describe=({candidate,value})=>describeDecision(candidate)+' ['+value.toFixed(2)+']';
+  const selected=scored.find(item=>item.candidate===action);
+  const alternatives=scored.filter(item=>item!==selected).sort((a,b)=>b.value-a.value).slice(0,3);
+  analysisLog.push('Round '+round+' · Turno '+(serial+1)+' · Decide '+labels[side]+' · '+stages[phase]+
+    ' · '+name(unit)+' '+cellLabel(unit.cell)+' · '+unit.hp+' PF, '+unit.pe+' PE, '+unit.pm+' PM'+
+    '\n  Scelta: '+describe(selected)+(alternatives.length?'\n  Alternative: '+alternatives.map(describe).join(' | '):''));
 }
 
 const untargetedSpells=new Set([
@@ -992,6 +1038,7 @@ function scheduleComputer(){
   spectatorControls.hidden=matchMode!=='spectator';
   toggleComputers.textContent=paused?'Avvia':'Pausa';
   const finished=phase==='end'||botStopped;
+  document.querySelector('#copy-match-log').hidden=matchMode==='local';
   toggleComputers.disabled=finished;
   stepComputers.disabled=finished||!paused||animatingMovement;
   if(finished||animatingMovement||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
@@ -1138,6 +1185,22 @@ document.querySelector('#reset').onclick=()=>{if(confirm('Iniziare una nuova par
 const titleScreen=document.querySelector('#title-screen');
 const matchHeader=document.querySelector('#match-header');
 const startLocal=document.querySelector('#start-local');
+const copyMatchLog=document.querySelector('#copy-match-log');
+const logExport=document.querySelector('#match-log-export');
+copyMatchLog.onclick=async()=>{
+  const scores=teams.map((team,side)=>labels[side]+': '+team.kills+' uccisioni, '+team.ritual+' rituali');
+  const result=phase==='end'?'Vince '+labels[winner]:botStopped?'Partita interrotta':'Partita in corso';
+  const report=[...analysisLog,'','Round '+round+' · '+result+' · '+scores.join(' | ')].join('\n');
+  try{
+    await navigator.clipboard.writeText(report);
+    copyMatchLog.textContent='Registro copiato';
+  }catch{
+    logExport.hidden=false;
+    logExport.value=report;
+    logExport.focus();
+    logExport.select();
+  }
+};
 const startSolo=document.querySelector('#start-solo');
 const startSpectator=document.querySelector('#start-spectator');
 const setupForm=document.querySelector('#computer-setup');
@@ -1194,6 +1257,7 @@ document.querySelector('#main-menu').onclick=()=>{
   clearTimeout(botTimer);
   cancelMovementAnimation();
   matchHeader.hidden=true;
+  logExport.hidden=true;
   root.hidden=true;
   root.replaceChildren();
   titleScreen.hidden=false;

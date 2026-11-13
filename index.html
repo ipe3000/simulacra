@@ -62,8 +62,10 @@
     </label>
   </div>
   <button id="reset" type="button">Nuova partita</button>
+  <button id="copy-match-log" type="button" hidden title="Il registro include le carte considerate nelle decisioni dei computer">Copia registro partita</button>
   <button id="main-menu" type="button">Menu principale</button>
 </header>
+<textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
 <main id="game" hidden></main>
-<script type="module" src="./game.mjs?v=9"></script>
+<script type="module" src="./game.mjs?v=10"></script>
 </html>
