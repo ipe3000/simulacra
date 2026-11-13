@@ -1,4 +1,5 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
+import catalog from './catalogo-carte.json' with {type:'json'};
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -17,7 +18,28 @@ const cards={
   feral:['Trasmutazione Ferina',2,'Utilità · Personale','Ottieni 3 PM. Se sei Rallentato, rimuovi la Condizione e il suo effetto.'],
   dissolve:['Dissolvi Creazione',2,'Utilità · Vista','Rimuovi una Creazione, anche se indistruttibile.'],
 };
+const attacks={
+  flash:{ref:2,damage:2,condition:'Accecato'},
+  arrow:{ref:3,damage:2,draw:true},
+  whip:{ref:4,damage:2,condition:'Confuso'},
+  claw:{ref:5,damage:2,condition:'Vulnerabile'},
+  assault:{ref:9,damage:2,drain:2},
+  hammer:{ref:11,damage:3,self:'Vulnerabile'},
+  word:{ref:13,damage:1,condition:'Maledetto'},
+  ray:{ref:15,damage:2},
+  gaze:{ref:18,damage:2,condition:'Pietrificato'},
+  leech:{ref:19,damage:2,self:'Vulnerabile',heal:true},
+  toxin:{ref:20,damage:2,condition:'Vulnerabile',drain:1},
+};
+for(const [id,{ref}] of Object.entries(attacks)){
+  const {nome,costo,tipo,gittata,effetto}=catalog[ref-1];
+  cards[id]=[nome,costo,tipo+' · '+gittata,effetto];
+}
+const isAttack=id=>id==='arc'||id==='cut'||Object.hasOwn(attacks,id);
 const conditions={
+  Accecato:'Non può lanciare incantesimi con gittata Vista.',
+  Vulnerabile:'Quando subisce danni perde 1 PF aggiuntivo.',
+  Pietrificato:'Salta la Fase di Azione e non può perdere PF.',
   Rallentato:'Ottiene 2 PM in meno all’inizio del suo Turno.',
   Invisibile:'Non può essere bersaglio di incantesimi con gittata Vista.',
   Confuso:'Nel suo Turno può muoversi oppure attaccare.',
@@ -27,7 +49,7 @@ const afflictions={gravity:'Rallentato',frost:'Rallentato',vertigo:'Confuso',cur
 const pool=['cut','wall','probe','veto','cut','veto'];
 const reserveDeck=['stride','gravity','meditate','frost','veil','curse','refill','vertigo','feral','dissolve'];
 const types=['Attacco','Utilità','Reazione'];
-const ranges=['Personale','Tocco','Vista','Ovunque'];
+const ranges=['Personale','Tocco','Vista','Labirinto','Ovunque'];
 function orderedHand(hand){
   return hand.map((id,i)=>{
     const [label,cost,category,description]=cards[id];
@@ -55,7 +77,7 @@ const same=(a,b)=>a.every((v,i)=>v===b[i]);
 function start(){
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
   teams=[0,1].map(()=>{
-    const deck=shuffle([...pool,...pool,...reserveDeck,...reserveDeck.slice(0,8)]);
+    const deck=shuffle([...pool,...Object.keys(attacks),...reserveDeck,...reserveDeck.slice(0,3)]);
     return {hand:deck.splice(0,6),deck,discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false};
   });
   const first=Math.random()<.5?0:1;
@@ -82,6 +104,9 @@ function clearCurses(){
     if(u.cell!==null&&has(u,'Maledetto')&&neighbors(u.cell).some(c=>at(c)?.side===1-u.side))delete u.conditions.Maledetto;
   }
 }
+function applyCondition(u,condition){
+  if(condition&&u.cell!==null&&!has(u,condition))u.conditions[condition]=turn();
+}
 function walk(u){
   return paths([u.cell],u.pm,(a,b)=>{
     if(blocked([...center(a),...center(b)],obstacles(u.side)))return Infinity;
@@ -95,8 +120,15 @@ function legalCells(){
   if(phase!=='action')return [];
   if(mode==='move')return has(u,'Confuso')&&u.attacked?[]:[...walk(u).keys()].filter(c=>!at(c));
   if(mode==='jump')return cells.filter(c=>!at(c)&&sight(u.cell,center(c),u.side));
-  if(mode==='arc'||mode==='cut')return neighbors(u.cell).filter(c=>at(c)?.side===1-u.side
-    && !(round===1&&zones[1-u.side].includes(c))&&sight(u.cell,center(c),u.side));
+  if(isAttack(mode)){
+    const range=cards[mode][2];
+    const reach=mode==='ray'?paths([u.cell],3,(a,b)=>blocked([...center(a),...center(b)],obstacles(u.side))?Infinity:1):null;
+    return units.filter(v=>v.side!==u.side&&v.cell!==null
+      && !(round===1&&zones[v.side].includes(v.cell))
+      && (reach?reach.has(v.cell):range.endsWith('Tocco')
+        ?neighbors(u.cell).includes(v.cell)&&sight(u.cell,center(v.cell),u.side)
+        :!has(u,'Accecato')&&!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side))).map(v=>v.cell);
+  }
   if(afflictions[mode])return units.filter(v=>v.cell!==null&&v!==u&&
     (['frost','vertigo'].includes(mode)||(!has(v,'Invisibile')&&sight(u.cell,center(v.cell),u.side)))).map(v=>v.cell);
   return [];
@@ -115,6 +147,7 @@ function begin(){
   mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
   u.moved=false;u.slowPenalty=has(u,'Rallentato')?2:0;u.pm-=u.slowPenalty;
   phase=u.cell===null?'spawn':'action';
+  if(phase==='action'&&has(u,'Pietrificato'))phase='charge';
   ritualReady=phase==='action'&&canRitual();
   show(u.side);
 }
@@ -153,6 +186,8 @@ function victory(side){
   return false;
 }
 function damage(u,amount){
+  if(has(u,'Pietrificato'))return;
+  amount+=has(u,'Vulnerabile')?1:0;
   u.hp=Math.max(0,u.hp-amount);
   note(name(u)+' perde '+amount+' PF.');
   if(u.hp===0){
@@ -165,7 +200,7 @@ function damage(u,amount){
 function targetUnit(c){
   const id=mode,u=active(),defender=at(c);
   if(!cast(id))return;
-  if(id==='arc'||id==='cut')u.attacked=true;
+  if(isAttack(id))u.attacked=true;
   pending={id,defender};
   const t=teams[defender.side];
   if(t.hand.includes('veto')&&!t.reaction&&affordable(defender,3)){
@@ -181,8 +216,15 @@ function resolve(veto){
     note(labels[defender.side]+' annulla l’incantesimo con Veto Arcano.');
   }
   phase='action';pending=null;mode='move';
-  if(veto||id==='arc'||id==='cut')damage(defender,veto||id==='arc'?1:2);
-  else if(!has(defender,afflictions[id]))defender.conditions[afflictions[id]]=turn();
+  const effect=attacks[id];
+  if(veto||isAttack(id))damage(defender,veto||id==='arc'?1:effect?.damage??2);
+  if(!veto&&phase!=='end'){
+    applyCondition(defender,effect?.condition??afflictions[id]);
+    applyCondition(u,effect?.self);
+    if(effect?.drain&&defender.cell!==null)defender.pe=Math.max(0,defender.pe-effect.drain);
+    if(effect?.draw)draw(u.side);
+    if(effect?.heal)u.hp=Math.min(u.type==='Terra'?8:6,u.hp+1);
+  }
   clearCurses();
   if(phase!=='end'){
     if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
@@ -200,7 +242,7 @@ function selectCell(c){
   }
   if(phase==='spawn'){
     u.cell=c;u.hp=u.type==='Terra'?8:6;u.pe=4;phase='action';ritualReady=canRitual();
-  }else if(mode==='arc'||mode==='cut'||afflictions[mode]){targetUnit(c);return;}
+  }else if(isAttack(mode)||afflictions[mode]){targetUnit(c);return;}
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
@@ -255,7 +297,7 @@ function pick(id){
 }
 function destroy(i){
   const u=active(),t=teams[u.side],e=barriers[1-u.side];
-  if(!e||!pay(u,2))return;
+  if(!e||!pay(u,cards[t.hand[i]][1]))return;
   discard(u.side,i);barriers[1-u.side]=null;ritualReady=false;
   note('Barriera di Forza distrutta.');render();
 }
@@ -317,7 +359,8 @@ function render(){
     hand=orderedHand(teams[side].hand).map(({id,i,label,cost,type,range,description},position,entries)=>{
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
-      const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)&&!(id==='cut'&&(u.attacked||(has(u,'Confuso')&&u.moved)));
+      const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)
+        && !(range==='Vista'&&has(u,'Accecato'))&&!(isAttack(id)&&(u.attacked||(has(u,'Confuso')&&u.moved)));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       return button('<strong>'+label+'</strong><small>'+type+' · '+cost+' PE</small><small>'+range+'</small>',()=>{
@@ -325,7 +368,7 @@ function render(){
         else if(phase==='charge'){discard(side,i);phase='refill';render();}
         else pick(id);
       },playable||phase!=='action','card '+(mode===id?'selected':'')+boundary,label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description)+
-      (phase==='action'&&mode!=='jump'&&id==='cut'&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,2)):'');
+      (phase==='action'&&mode!=='jump'&&isAttack(id)&&adjacent?button('Scarta per distruggere',()=>destroy(i),affordable(u,cost)):'');
     }).join('');
     if(phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
   }

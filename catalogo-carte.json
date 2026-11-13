@@ -1,0 +1,632 @@
+[
+  {
+    "ref": "blu-01",
+    "nome": "Fendente Dimensionale",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "2 danni. Teletrasportati in una casella vuota in LdV.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-02",
+    "nome": "Folgore Abbagliante",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "2 danni e Accecato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-03",
+    "nome": "Freccia Runica",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "2 danni. Peschi 1 carta.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-04",
+    "nome": "Frusta Folgorante",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "2 danni e Confuso.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-05",
+    "nome": "Graffio Velenoso",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "2 danni e Vulnerabile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-06",
+    "nome": "Onda Tonante",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "2 danni e viene spostato fino a 3 caselle.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-07",
+    "nome": "Scheggia Polimorfica",
+    "tipo": "Attacco",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "1 danno e 2 condizioni a scelta tra Confuso, Vulnerabile, Accecato, Rallentato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-08",
+    "nome": "Artiglio Necrotico",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "2 danni e scarta 2 carte a sua scelta (senza scendere sotto le 3 carte in mano).",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-09",
+    "nome": "Assalto Psichico",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "2 danni e perde 2 PE.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-10",
+    "nome": "Carica Fulminea",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Muoviti fino ad un nemico entro LdV senza pagare PM. 2 danni.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-11",
+    "nome": "Martello Distruttivo",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "3 danni. Tu ottieni Vulnerabile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-12",
+    "nome": "Palla di Fuoco",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "2 danni. 1 danno ad un altro nemico entro 3 caselle di movimento dal primo.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-13",
+    "nome": "Parola Maledetta",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "1 danno e Maledetto.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-14",
+    "nome": "Pugno Astrale",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "1 danno e teletrasportalo in una casella vuota entro 2 caselle ignorando muri e creazioni.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-15",
+    "nome": "Raggio Comandato",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Labirinto",
+    "effetto": "2 danni. Bersagli un Simulacro entro 3 caselle di movimento da te.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-16",
+    "nome": "Razzia Mentale",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "1 danno. Guarda la mano del Mago Supremo avversario, scegli 1 carta e aggiungila alla tua mano. Quando giocherai quella carta, andrà negli scarti avversari.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-17",
+    "nome": "Sfera Rimbalzante",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "2 danni. Per questo incantesimo la LdV può curvare una volta di 90° o di 180°.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-18",
+    "nome": "Sguardo Pietrificante",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "2 danni e Pietrificato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-19",
+    "nome": "Tocco Vampirico",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "2 danni. Tu ottieni Vulnerabile e ti curi di 1 PF.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-20",
+    "nome": "Tossina Psichica",
+    "tipo": "Attacco",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "2 danni, Vulnerabile e perde 1 PE.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-21",
+    "nome": "Dominio Spaziale",
+    "tipo": "Reazione",
+    "costo": 0,
+    "gittata": "Personale",
+    "effetto": "Quando stai per essere spostato o teletrasportato, annulla questo effetto e rimani nella tua casella.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-22",
+    "nome": "Schermo Cinetico",
+    "tipo": "Reazione",
+    "costo": 0,
+    "gittata": "Personale",
+    "effetto": "Quando un Simulacro nemico entra in adiacenza con te, spostalo lontano di 2 caselle.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-23",
+    "nome": "Blocco Temporale",
+    "tipo": "Reazione",
+    "costo": 1,
+    "gittata": "Ovunque",
+    "effetto": "Quando vuoi nel turno nemico, lancia un tuo incantesimo Utilità pagando i relativi PE, poi ottieni Rallentato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-24",
+    "nome": "Catene Invisibili",
+    "tipo": "Reazione",
+    "costo": 1,
+    "gittata": "Personale",
+    "effetto": "Quando un Simulacro nemico lascia l’adiacenza con un tuo Simulacro, riportalo indietro adiacente a te. Il bersaglio perde 2 PM (o quanto disponibile) per quel turno.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-25",
+    "nome": "Presenza Paralizzante",
+    "tipo": "Reazione",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "Quando un Simulacro nemico entra in LdV per la prima volta nel turno con te, il bersaglio perde 2 PM (o quanto disponibile) per quel turno.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-26",
+    "nome": "Scatto Fulmineo",
+    "tipo": "Reazione",
+    "costo": 1,
+    "gittata": "Personale",
+    "effetto": "Dopo che hai subito danni, muoviti fino a 3 caselle senza spendere PM.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-27",
+    "nome": "Veto Arcano",
+    "tipo": "Reazione",
+    "costo": 3,
+    "gittata": "Personale",
+    "effetto": "Quando sei bersagliato da un incantesimo, annulla il suo effetto. Tu perdi 1 PF. L’attaccante ottiene 2 PE e pesca una carta.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-28",
+    "nome": "Piede Svelto",
+    "tipo": "Utilità",
+    "costo": 0,
+    "gittata": "Personale",
+    "effetto": "Ottieni +1 PM in questo turno.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-29",
+    "nome": "Dissolvi Creazione",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "Rimuovi una creazione dal labirinto, anche se indistruttibile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-30",
+    "nome": "Barriera Spirituale",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Ovunque",
+    "effetto": "Crea 1 barriera spirituale in un confine vuoto tra due caselle. Blocca LdV dei nemici. È indistruttibile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-31",
+    "nome": "Canto Dannato",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Vista",
+    "effetto": "Maledetto.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-32",
+    "nome": "Mano Gigante",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Vista",
+    "effetto": "Un Simulacro nemico viene spostato adiacente a te, con il tragitto più corto.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-33",
+    "nome": "Meditazione Metafisica",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Personale",
+    "effetto": "Pesca 2 carte.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-34",
+    "nome": "Percezione Remota",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Ovunque",
+    "effetto": "Lancia un altro incantesimo come se fossi nella casella dell’altro tuo Simulacro. Paga anche i PE del secondo incantesimo.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-35",
+    "nome": "Proiezione Eterea",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Personale",
+    "effetto": "In questo turno puoi lanciare incantesimi con gittata Tocco come se fossero a gittata Vista.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-36",
+    "nome": "Ricarica Arcana",
+    "tipo": "Utilità",
+    "costo": 1,
+    "gittata": "Personale",
+    "effetto": "Recuperi 2 segnalini Riserva Arcana.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-37",
+    "nome": "Barriera Illusoria",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "Crea 1 barriera illusoria in un confine vuoto tra due caselle. Blocca LdV dei nemici. È indistruttibile. Quando un nemico la attraversa, per tutto il resto del suo turno non può attaccare.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-38",
+    "nome": "Campo Gravitazionale",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "Rallentato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-39",
+    "nome": "Cubo di Gelatina",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Crea 1 cubo di gelatina in una casella vuota. Blocca la LdV dei nemici. I nemici spendono 2 PM per uscirne e, finché sono dentro, hanno Vulnerabile. È indistruttibile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-40",
+    "nome": "Distorsione Spaziale",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Ovunque",
+    "effetto": "Bersaglia una tua creazione nel labirinto. Spostala entro gittata Vista, rispettando le condizioni specificate in fase di creazione.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-41",
+    "nome": "Duplicato Etereo",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "Per il prossimo incantesimo lanciato nel turno, considerati come se tu fossi entro 2 caselle di movimento dalla tua vera posizione.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-42",
+    "nome": "Inversione Dimensionale",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Ovunque",
+    "effetto": "Se nessuno dei tuoi Simulacri ha un punto rituale, scambia la loro posizione.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-43",
+    "nome": "Passo Fantasma",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "In questo turno, tu puoi attraversare un muro o barriera una volta sola. Per il resto del turno, non puoi attaccare.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-44",
+    "nome": "Purificazione Divina",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "Rimuovi 1 Segnalino Condizione a scelta. Per rimuovere Maledetto si deve perdere 1 PF.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-45",
+    "nome": "Tempo Rallentato",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "In questo turno nessuno può lanciare incantesimi a Reazione.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-46",
+    "nome": "Scambio Spaziale",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Vista",
+    "effetto": "Scegli due Simulacri. Scambia la loro posizione.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-47",
+    "nome": "Schizzo Corrosivo",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "L’Arcimago nemico scarta 2 carte a sua scelta, ma senza rimanere con meno di 3 carte in mano.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-48",
+    "nome": "Sostituzione Astrale",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Tocco",
+    "effetto": "Rallentato. Scambia di posto con il bersaglio.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-49",
+    "nome": "Spinta Telecinetica",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Ovunque",
+    "effetto": "Spostalo fino a 2 caselle.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-50",
+    "nome": "Trasmutazione Ferina",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "Ottieni +3 PM questo turno. Se sei Rallentato, rimuovi subito la condizione e il suo effetto.",
+    "copiePerArcimago": 2
+  },
+  {
+    "ref": "blu-51",
+    "nome": "Velo d’Ombra",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "Invisibile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-52",
+    "nome": "Visione Oracolare",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "Pesca 3 carte. Una di queste rimettila in cima al tuo mazzo o in fondo.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-53",
+    "nome": "Vista Penetrante",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "In questo turno puoi tracciare la LdV anche sulla prima casella oltre muri e barriere.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-54",
+    "nome": "Ballista Animata",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Crea 1 ballista incantata in una casella vuota che non ha LdV con un nemico. Blocca LdV. Una volta per turno, appena un nemico entra nella sua LdV, gli infligge 1 danno. Può essere distrutta solo da Colpo Arcano.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-55",
+    "nome": "Balzo Dimensionale",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Personale",
+    "effetto": "Teletrasportati in una casella vuota entro 2 caselle ortogonali (ignora creazioni e muri). Per il resto del turno, non puoi attaccare.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-56",
+    "nome": "Baratto Vitale",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Bersaglia l’altro tuo Simulacro. Scambia fino a 2 PF tra te e quel Simulacro, nella direzione preferita. Non può scendere a 0 un Simulacro.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-57",
+    "nome": "Barriera di Forza",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "Crea 1 barriera di forza in un confine vuoto tra due caselle. Blocca movimento e LdV dei nemici. Per distruggerla: un nemico adiacente deve scartare 1 carta Attacco, pagando il suo costo in PE.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-58",
+    "nome": "Barriera di Luce",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Crea 1 barriera di luce in un confine vuoto tra due caselle. Blocca LdV dei nemici. Quando un nemico la attraversa, subisce 1 danno, ottiene Accecato, poi la barriera svanisce.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-59",
+    "nome": "Ribaltamento Karmico",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Se il tuo Arcimago è secondo in ordine nel round, perdi subito 1 PF e dal prossimo round il tuo Arcimago diventa primo. Se è già primo, pesca 2 carte.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-60",
+    "nome": "Carezza Contagiosa",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Rimuovi 1 segnalino Condizione a scelta (eccetto Maledetto) e assegnalo ad un nemico a gittata.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-61",
+    "nome": "Illuminazione Spirituale",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Personale",
+    "effetto": "Cerca una carta a scelta nel tuo mazzo degli scarti. Aggiungila alla tua mano.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-62",
+    "nome": "Luce Radiosa",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Accecato fino a due nemici.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-63",
+    "nome": "Morsa Ghiacciata",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Rallentato.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-64",
+    "nome": "Sonda Telepatica",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Guarda la mano dell’Arcimago avversario: scarta una carta a tua scelta.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-65",
+    "nome": "Spirito Terrorizzante",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Vista",
+    "effetto": "Rallentato. Spostalo fino a 2 caselle lontano da te.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-66",
+    "nome": "Spruzzo Tossico",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Vulnerabile e Rallentato. Tu ottieni Vulnerabile.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-67",
+    "nome": "Frenesia Occulta",
+    "tipo": "Utilità",
+    "costo": 2,
+    "gittata": "Personale",
+    "effetto": "In questo turno tu puoi attaccare due volte. Devono essere bersagli diversi.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-68",
+    "nome": "Varco Etereo",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Tocco",
+    "effetto": "Crea 1 varco etereo su un muro esistente. Non blocca movimento; blocca LdV dei nemici.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-69",
+    "nome": "Vertigine Psichica",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Confuso.",
+    "copiePerArcimago": 1
+  },
+  {
+    "ref": "blu-70",
+    "nome": "Vortice Telecinetico",
+    "tipo": "Utilità",
+    "costo": 3,
+    "gittata": "Ovunque",
+    "effetto": "Sposta tutti i Simulacri (compreso questo) fino a 1 casella, nell’ordine che vuoi.",
+    "copiePerArcimago": 1
+  }
+]
