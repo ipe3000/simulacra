@@ -35,6 +35,11 @@ for(const [id,{ref}] of Object.entries(attacks)){
   const {nome,costo,tipo,gittata,effetto}=catalog[ref-1];
   cards[id]=[nome,costo,tipo+' · '+gittata,effetto];
 }
+const extra={dash:26,projection:35,cleanse:44,oracle:52,illumination:61,radiance:62};
+for(const [id,ref] of Object.entries(extra)){
+  const {nome,costo,tipo,gittata,effetto}=catalog[ref-1];
+  cards[id]=[nome,costo,tipo+' · '+gittata,effetto];
+}
 const isAttack=id=>id==='arc'||id==='cut'||Object.hasOwn(attacks,id);
 const conditions={
   Accecato:'Non può lanciare incantesimi con gittata Vista.',
@@ -46,8 +51,22 @@ const conditions={
   Maledetto:'Perde 1 PF al Caricamento. La Condizione si rimuove quando è adiacente a un nemico.',
 };
 const afflictions={gravity:'Rallentato',frost:'Rallentato',vertigo:'Confuso',curse:'Maledetto'};
-const pool=['cut','wall','probe','veto','cut','veto'];
-const reserveDeck=['stride','gravity','meditate','frost','veil','curse','refill','vertigo','feral','dissolve'];
+const implementedRefs={cut:1,wall:57,probe:64,veto:27,stride:28,gravity:38,meditate:33,
+  frost:63,veil:51,curse:31,refill:36,vertigo:69,feral:50,dissolve:29,
+  ...extra,...Object.fromEntries(Object.entries(attacks).map(([id,value])=>[id,value.ref]))};
+const deckQuotas=[['Reazione',4],['Attacco',8],['Utilità',18]];
+function makeDeck(){
+  const entries=Object.entries(implementedRefs);
+  return shuffle(deckQuotas.flatMap(([type,count])=>{
+    const copies=entries.flatMap(([id,ref])=>{
+      const card=catalog[ref-1];
+      if(card.nome!==cards[id][0])throw new Error('Riferimento carta incoerente: '+id);
+      return card.tipo===type?Array(card.copiePerArcimago).fill(id):[];
+    });
+    if(copies.length<count)throw new Error('Copie insufficienti: '+type);
+    return shuffle(copies).slice(0,count);
+  }));
+}
 const types=['Attacco','Utilità','Reazione'];
 const ranges=['Personale','Tocco','Vista','Labirinto','Ovunque'];
 function orderedHand(hand){
@@ -67,7 +86,7 @@ function shuffle(deck){
 }
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
-let units,teams,order,index,round,setup,viewer,phase,mode,barriers,log,winner,ritualReady,pending;
+let units,teams,order,index,round,setup,viewer,phase,mode,barriers,log,winner,ritualReady,pending,choice;
 const active=()=>units[order[index]];
 const at=c=>units.find(u=>u.cell===c);
 const name=u=>labels[u.side]+' · '+u.type;
@@ -77,13 +96,13 @@ const same=(a,b)=>a.every((v,i)=>v===b[i]);
 function start(){
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
   teams=[0,1].map(()=>{
-    const deck=shuffle([...pool,...Object.keys(attacks),...reserveDeck,...reserveDeck.slice(0,3)]);
+    const deck=makeDeck();
     return {hand:deck.splice(0,6),deck,discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false};
   });
   const first=Math.random()<.5?0:1;
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
-  phase='setup'; mode='move'; barriers=[null,null]; log=[]; winner=null; pending=null;
+  phase='setup'; mode='move'; barriers=[null,null]; log=[]; winner=null; pending=null;choice=null;
   show(first);
 }
 function show(side){
@@ -107,8 +126,8 @@ function clearCurses(){
 function applyCondition(u,condition){
   if(condition&&u.cell!==null&&!has(u,condition))u.conditions[condition]=turn();
 }
-function walk(u){
-  return paths([u.cell],u.pm,(a,b)=>{
+function walk(u,budget=u.pm){
+  return paths([u.cell],budget,(a,b)=>{
     if(blocked([...center(a),...center(b)],obstacles(u.side)))return Infinity;
     return at(b)?.side===1-u.side?2:1;
   });
@@ -117,11 +136,12 @@ function legalCells(){
   const u=active();
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
   if(phase==='spawn')return respawn(zones[u.side],c=>!at(c));
+  if(phase==='dash')return [...walk(choice.unit,3).keys()].filter(c=>!at(c));
   if(phase!=='action')return [];
   if(mode==='move')return has(u,'Confuso')&&u.attacked?[]:[...walk(u).keys()].filter(c=>!at(c));
   if(mode==='jump')return cells.filter(c=>!at(c)&&sight(u.cell,center(c),u.side));
   if(isAttack(mode)){
-    const range=cards[mode][2];
+    const range=u.projection?cards[mode][2].replace('Tocco','Vista'):cards[mode][2];
     const reach=mode==='ray'?paths([u.cell],3,(a,b)=>blocked([...center(a),...center(b)],obstacles(u.side))?Infinity:1):null;
     return units.filter(v=>v.side!==u.side&&v.cell!==null
       && !(round===1&&zones[v.side].includes(v.cell))
@@ -145,6 +165,7 @@ function begin(){
   const u=active();
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
   mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
+  u.projection=false;
   u.moved=false;u.slowPenalty=has(u,'Rallentato')?2:0;u.pm-=u.slowPenalty;
   phase=u.cell===null?'spawn':'action';
   if(phase==='action'&&has(u,'Pietrificato'))phase='charge';
@@ -160,7 +181,11 @@ function draw(side){
   if(!t.deck.length){
     t.deck=shuffle(t.discard.splice(0));
   }
-  if(t.deck.length)t.hand.push(t.deck.shift());
+  if(t.deck.length){
+    t.hand.push(t.deck.shift());
+    return true;
+  }
+  return false;
 }
 function discard(side,i){const t=teams[side];t.discard.push(...t.hand.splice(i,1));}
 function affordable(u,cost){const t=teams[u.side];return cost<=u.pe+Math.min(t.reserve,2-t.spent);}
@@ -217,6 +242,7 @@ function resolve(veto){
   }
   phase='action';pending=null;mode='move';
   const effect=attacks[id];
+  const before=defender.hp;
   if(veto||isAttack(id))damage(defender,veto||id==='arc'?1:effect?.damage??2);
   if(!veto&&phase!=='end'){
     applyCondition(defender,effect?.condition??afflictions[id]);
@@ -229,12 +255,29 @@ function resolve(veto){
   if(phase!=='end'){
     if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
+    const t=teams[defender.side];
+    if(!veto&&defender.cell!==null&&defender.hp<before&&!t.reaction&&t.hand.includes('dash')&&affordable(defender,1)){
+      choice={unit:defender,resume:mode};phase='afterDamage';show(defender.side);return;
+    }
   }
   show(u.side);
+}
+function finishDash(){
+  mode=choice.resume;phase='action';choice=null;show(active().side);
+}
+function reactDash(){
+  const u=choice.unit,t=teams[u.side];
+  if(!pay(u,1))return;
+  discard(u.side,t.hand.indexOf('dash'));t.reaction=true;
+  note(name(u)+' usa Scatto Fulmineo.');
+  phase='dash';render();
 }
 function selectCell(c){
   if(!legalCells().includes(c))return;
   const u=active();
+  if(phase==='dash'){
+    choice.unit.cell=c;clearCurses();finishDash();return;
+  }
   if(phase==='setup'){
     const placed=units[setup.shift()];placed.cell=c;
     if(setup.length)show(units[setup[0]].side);else begin();
@@ -277,6 +320,22 @@ function ritualAction(){
   if(!victory(u.side))charge();else render();
 }
 function pick(id){
+  const u=active(),t=teams[u.side];
+  if(id==='projection'){
+    if(cast(id)){u.projection=true;mode='move';render();}
+    return;
+  }
+  if(['cleanse','oracle','illumination','radiance'].includes(id)){
+    const options=id==='cleanse'?Object.keys(u.conditions):id==='illumination'?[...new Set(t.discard)]
+      :id==='radiance'?units.filter(v=>v.cell!==null&&v.side!==u.side):[];
+    if(id!=='oracle'&&id!=='radiance'&&!options.length)return;
+    if(!cast(id))return;
+    choice={id,options};
+    if(id==='oracle'){
+      for(let count=0;count<3;count++)if(draw(u.side))options.push(t.hand.length-1);
+    }
+    phase='choice';mode='move';render();return;
+  }
   if(['stride','meditate','refill','veil','feral'].includes(id)){
     if(!cast(id))return;
     const u=active(),t=teams[u.side];
@@ -294,6 +353,9 @@ function pick(id){
     phase='probe';mode='move';render();return;
   }
   mode=mode===id?'move':id;render();
+}
+function finishChoice(){
+  choice=null;if(phase!=='end')phase='action';render();
 }
 function destroy(i){
   const u=active(),t=teams[u.side],e=barriers[1-u.side];
@@ -354,12 +416,36 @@ function render(){
   }
   if(visible&&phase==='charge')controls=button('Ricarica e termina',advance,t.hand.length<=6);
   if(visible&&phase==='reaction')controls=button('Veto Arcano · 3 PE',()=>resolve(true))+button('Passa',()=>resolve(false));
+  if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · 1 PE',reactDash)+button('Passa',finishDash);
+  if(visible&&phase==='dash')controls=button('Resta qui',finishDash);
+  if(visible&&phase==='choice'){
+    controls=choice.options.map(option=>{
+      if(choice.id==='oracle')return ['cima','fondo'].map(where=>button(cards[t.hand[option]][0]+' · '+where,()=>{
+        const [id]=t.hand.splice(option,1);
+        if(where==='cima')t.deck.unshift(id);else t.deck.push(id);
+        finishChoice();
+      })).join('');
+      if(choice.id==='illumination')return button(cards[option][0],()=>{
+        t.hand.push(...t.discard.splice(t.discard.indexOf(option),1));finishChoice();
+      });
+      if(choice.id==='radiance')return button(name(option),()=>{
+        applyCondition(option,'Accecato');choice.options=choice.options.filter(v=>v!==option);
+        if(choice.options.length)render();else finishChoice();
+      });
+      return button(option,()=>{
+        delete u.conditions[option];
+        if(option==='Maledetto')damage(u,1);
+        finishChoice();
+      });
+    }).join('');
+    if(!choice.options.length||choice.id==='radiance')controls+=button('Termina scelta',finishChoice);
+  }
   if(visible&&['action','charge','probe'].includes(phase)){
     const side=phase==='probe'?1-u.side:u.side;
     hand=orderedHand(teams[side].hand).map(({id,i,label,cost,type,range,description},position,entries)=>{
       const e=barriers[1-u.side];
       const adjacent=e&&neighbors(u.cell).some(c=>same(e,edge(c,u.cell)));
-      const playable=phase==='action'&&mode!=='jump'&&id!=='veto'&&affordable(u,cost)&&!u.played.includes(id)
+      const playable=phase==='action'&&mode!=='jump'&&type!=='Reazione'&&affordable(u,cost)&&!u.played.includes(id)
         && !(range==='Vista'&&has(u,'Accecato'))&&!(isAttack(id)&&(u.attacked||(has(u,'Confuso')&&u.moved)));
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
@@ -378,7 +464,8 @@ function render(){
   }
   const turnBar=document.querySelector('#turn');
   turnBar.className=viewer?'turn-blue':'turn-red';
-  turnBar.textContent='Round '+round+' · '+(phase==='refill'?'Caricamento · '+name(u):title);
+  const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):null;
+  turnBar.textContent='Round '+round+' · '+(choiceTitle??(phase==='refill'?'Caricamento · '+name(u):title));
   const historyOpen=root.querySelector('details')?.open;
   root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
     (hand?'<section class="hand"><h3>'+(phase==='probe'?'Mano avversaria':'Mano · '+labels[viewer])+'</h3><div class="cards">'+hand+'</div></section>':'')+
