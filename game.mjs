@@ -26,6 +26,13 @@ const conditions={
 const afflictions={gravity:'Rallentato',frost:'Rallentato',vertigo:'Confuso',curse:'Maledetto'};
 const pool=['cut','wall','probe','veto','cut','veto'];
 const reserveDeck=['stride','gravity','meditate','frost','veil','curse','refill','vertigo','feral','dissolve'];
+function shuffle(deck){
+  for(let i=deck.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [deck[i],deck[j]]=[deck[j],deck[i]];
+  }
+  return deck;
+}
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
 const dialog=document.querySelector('#handoff');
@@ -38,7 +45,10 @@ const same=(a,b)=>a.every((v,i)=>v===b[i]);
 
 function start(){
   units=[0,1,2,3].map(id=>({id,side:id%2,type:id<2?'Terra':'Fulmine',hp:id<2?8:6,pe:4,pm:0,cell:null,conditions:{}}));
-  teams=[0,1].map(()=>({hand:[...pool],deck:[...reserveDeck,...pool,...reserveDeck.slice(0,8)],discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false}));
+  teams=[0,1].map(()=>{
+    const deck=shuffle([...pool,...pool,...reserveDeck,...reserveDeck.slice(0,8)]);
+    return {hand:deck.splice(0,6),deck,discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false};
+  });
   const first=Math.random()<.5?0:1;
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
@@ -111,11 +121,7 @@ function canRitual(){
 function draw(side){
   const t=teams[side];
   if(!t.deck.length){
-    t.deck=t.discard.splice(0);
-    for(let i=t.deck.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      [t.deck[i],t.deck[j]]=[t.deck[j],t.deck[i]];
-    }
+    t.deck=shuffle(t.discard.splice(0));
   }
   if(t.deck.length)t.hand.push(t.deck.shift());
 }
