@@ -10,4 +10,6 @@ Per avviare in locale, eseguire `python -m http.server 8000` e aprire `http://lo
 
 Le animazioni evidenziano chi lancia un incantesimo, il bersaglio e le finestre di Reazione. Danni e Condizioni compaiono sulla plancia; il movimento segue il percorso casella per casella anche nelle partite locali. Il menu Animazioni regola il ritmo e permette di ridurre il movimento, rispettando inizialmente la preferenza del sistema.
 
+L’annuncio distingue il lancio dall’esito effettivo. Il pannello indica separatamente il Simulacro di turno e chi deve decidere; i pulsanti dei Simulacri aprono le spiegazioni delle Condizioni e della loro durata. Le carte indisponibili restano consultabili con il motivo del vincolo. Il collegamento «Ultimo turno e cronologia» apre il riepilogo avversario e lo storico delle azioni, con testi delle carte giocate, Reazioni e conseguenze. La cronologia non conserva le identità delle carte ancora nascoste.
+
 Per eseguire i test con Node.js, usare `node --test tests/*.test.mjs`. La suite verifica i casi di regressione e simula partite complete con semi riproducibili per tutte e tre le difficoltà.

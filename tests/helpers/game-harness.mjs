@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import * as engine from '../../engine.mjs';
 import {chooseComputerAction} from '../../computer.mjs';
 import {createFeedback} from '../../feedback.mjs';
+import {createChronicle} from '../../chronicle.mjs';
 
 const source=readFileSync(new URL('../../game.mjs',import.meta.url),'utf8')
   .replace(/^import .*;\r?\n/gm,'');
@@ -17,14 +18,14 @@ export function gameHarness(seed=1){
     if(!elements.has(selector))elements.set(selector,{
       hidden:false,value:'550',textContent:'',innerHTML:'',
       parentElement:{hidden:false},addEventListener(){},focus(){},
-      querySelector(){return null;},replaceChildren(){this.innerHTML='';},
+      querySelector(){return null;},querySelectorAll(){return [];},replaceChildren(){this.innerHTML='';},
     });
     return elements.get(selector);
   }
   const math=Object.create(Math);
   math.random=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/2**32);
   const context=vm.createContext({
-    ...engine,catalog,chooseComputerAction,createFeedback,Math:math,
+    ...engine,catalog,chooseComputerAction,createFeedback,createChronicle,Math:math,
     document:{querySelector:element},window:{confirm:()=>true},confirm:()=>true,
     setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},
     clearTimeout(id){timers.delete(id);},

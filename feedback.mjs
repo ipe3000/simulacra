@@ -37,14 +37,12 @@ export function createFeedback(root){
     stacks.clear();
     const before=previous;
     previous=structuredClone(state);
-    const banner=document.querySelector('#action-caption');
     const reaction=['reaction','afterDamage','dash'].includes(state.phase)||
       state.phase==='selection'&&state.choiceText?.startsWith('Reazione');
     root.classList.toggle('reaction-window',reaction);
     if(state.pending){
       const {from,to,label}=state.pending;
       for(const [cell,cls] of [[from,'spell-source'],[to,'spell-target']])root.querySelectorAll('.cell')[cell]?.classList.add(cls);
-      banner.textContent=(reaction?'Reazione · '+state.viewerLabel+' · ':'')+label;
       const board=root.querySelector('.board');
       const beam=document.createElementNS('http://www.w3.org/2000/svg','svg');
       beam.setAttribute('viewBox','0 0 1300 600');beam.setAttribute('preserveAspectRatio','none');
@@ -53,7 +51,7 @@ export function createFeedback(root){
       for(const [key,value] of Object.entries({x1:(from%13+.5)*100,y1:(Math.floor(from/13)+.5)*100,
         x2:(to%13+.5)*100,y2:(Math.floor(to/13)+.5)*100}))line.setAttribute(key,value);
       beam.append(line);board.append(beam);
-    }else if(reaction)banner.textContent=state.choiceText||'Reazione · '+state.viewerLabel;
+    }
     if(!before)return;
     for(const unit of state.units){
       const old=before.units.find(v=>v.id===unit.id);
@@ -85,14 +83,11 @@ export function createFeedback(root){
     for(let side=0;side<2;side++){
       const team=state.teams[side],old=before.teams[side];
       if(team.ritual>old.ritual)mark(state.units.find(u=>u.id===state.active)?.cell,'✦ Rituale','ritual-effect',side);
-      if(team.kills>old.kills)banner.textContent=state.labels[side]+' · +1 punto uccisione';
     }
     const event=state.events.at(-1);
     if(event){
-      if(!state.pending&&!reaction)banner.textContent=event.label;
       mark(event.cell,event.symbol||'✦',event.kind||'magic',event.side);
     }
-    if(state.phase==='end')banner.textContent='✦ Vince l’Arcimago '+state.labels[state.winner];
   }
   return {update,reset,enabled,reduced,speed,wait:()=>Math.max(0,holdUntil-Date.now())};
 }

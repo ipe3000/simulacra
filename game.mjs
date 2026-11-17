@@ -1,7 +1,8 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 import catalog from './catalogo-carte.json' with {type:'json'};
 import {chooseComputerAction} from './computer.mjs?v=2';
-import {createFeedback} from './feedback.mjs?v=1';
+import {createFeedback} from './feedback.mjs?v=2';
+import {createChronicle} from './chronicle.mjs?v=1';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -96,6 +97,15 @@ function shuffle(deck){
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
 const feedback=createFeedback(root);
+const chronicle=createChronicle();
+let inspected=0,historyLimit=8,historySignature='';
+const publicState=()=>({
+  units:units.map(u=>({id:u.id,name:name(u),hp:u.hp,pe:u.pe,pm:u.pm,cell:u.cell,position:cellLabel(u.cell),conditions:{...u.conditions}})),
+  teams:teams.map((t,i)=>({name:labels[i],reserve:t.reserve,kills:t.kills,ritual:t.ritual})),
+  creations:[...creations.map(v=>labels[v.side]+' · '+cards[v.id][0]+' · '+(v.cell===undefined?'confine '+v.edge.join(','):cellLabel(v.cell))),
+    ...barriers.flatMap((e,i)=>e?[labels[i]+' · Barriera di Forza · confine '+e.join(',')]:[])],
+});
+const publicCard=(id,u)=>({id,actor:name(u)});
 let visualEvents=[],presentationTimer,presenting=false;
 const signal=(label,unit,kind='magic',symbol)=>visualEvents.push({label,cell:unit?.cell,side:unit?.side,kind,symbol});
 function present(done){
@@ -133,6 +143,8 @@ function start(){
   clearTimeout(botTimer);
   cancelMovementAnimation();
   feedback.reset();visualEvents=[];
+  chronicle.reset();historyLimit=8;historySignature='';
+  document.querySelector('#route-caption').textContent='';
   document.querySelector('#action-caption').textContent='';
   logExport.hidden=true;
   copyMatchLog.textContent='Copia registro partita';
@@ -151,6 +163,7 @@ function start(){
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
   phase='setup'; mode='move'; barriers=[null,null]; creations=[]; log=[]; winner=null; pending=null;choice=null;
+  inspected=setup[0];
   show(first);
 }
 function show(side){
@@ -315,6 +328,7 @@ function selectCreation(location){
 }
 function begin(){
   const u=active();
+  chronicle.turn({serial,round,side:u.side,unit:name(u)},publicState());inspected=u.id;
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
   mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
   u.attackTargets=[];u.attackLimit=1;u.noAttack=false;reactionsLocked=false;
@@ -337,6 +351,7 @@ function draw(side){
   }
   if(t.deck.length){
     t.hand.push(t.deck.shift());
+    chronicle.add(labels[side]+' pesca 1 carta.');
     return true;
   }
   return false;
@@ -418,6 +433,7 @@ function cast(id){
   const index=teams[u.side].hand.indexOf(id);
   if(id!=='arc'&&index<0)return false;
   if(!pay(u,cards[id][1]))return false;
+  chronicle.begin({title:cards[id][0],actor:name(u),card:publicCard(id,u)});
   if(id!=='arc')discard(u.side,index);
   u.played.push(id);
   ritualReady=false;
@@ -435,6 +451,7 @@ function offerReaction(u,id,apply,pass){
   if(!canReact(u,id))return false;
   choose('Reazione · '+name(u),[[cards[id][0],()=>{
     if(!pay(u,cards[id][1]))return;
+    chronicle.reaction(publicCard(id,u));
     discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
     note(name(u)+' usa '+cards[id][0]+'.');signal(name(u)+' · '+cards[id][0],u);apply();
   },{reaction:id,unit:u}],['Passa',pass]],u.side);
@@ -449,6 +466,7 @@ function offerTimeBlock(side,done){
   choose('Reazione nel Turno avversario',[
     ...candidates.map(v=>['Blocco Temporale · '+name(v),()=>{
       if(!pay(v,1))return;
+      chronicle.reaction(publicCard('timeBlock',v));
       discard(v.side,t.hand.indexOf('timeBlock'));t.reaction=true;
       utilityReaction={order,index,done:resumeTurn,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
       order=[...order];order[index]=v.id;v.played=[];choice=null;mode='move';phase='action';show(v.side);
@@ -467,7 +485,8 @@ function victory(side){
   return false;
 }
 function damage(u,amount){
-  if(has(u,'Pietrificato'))return;
+  if(has(u,'Pietrificato')){chronicle.add(name(u)+' non perde PF: Pietrificato.');return;}
+  if(has(u,'Vulnerabile')||creations.some(v=>v.id==='cube'&&v.side!==u.side&&v.cell===u.cell))chronicle.add(name(u)+' subisce 1 danno aggiuntivo per Vulnerabile o Cubo nemico.');
   amount+=has(u,'Vulnerabile')||creations.some(v=>v.id==='cube'&&v.side!==u.side&&v.cell===u.cell)?1:0;
   u.hp=Math.max(0,u.hp-amount);
   note(name(u)+' perde '+amount+' PF.');
@@ -481,6 +500,7 @@ function damage(u,amount){
 function targetUnit(c){
   const id=mode,u=active(),defender=at(c);
   if(!cast(id))return;
+  if(chronicle.current)chronicle.current.target=name(defender);
   if(isAttack(id)){u.attacked=true;u.attackTargets.push(defender.id);}
   pending={id,defender};
   if(id==='chargeAttack'){
@@ -517,6 +537,7 @@ function movementReactions(u,from,to,done){
   choose('Reazione al movimento',[
     ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v),()=>{
       if(!pay(v,cards[id][1]))return;
+      chronicle.reaction(publicCard(id,v));
       discard(v.side,teams[v.side].hand.indexOf(id));teams[v.side].reaction=true;apply();
     },{reaction:id,unit:v}]),['Passa',done]],1-u.side);
 }
@@ -601,6 +622,8 @@ function resolve(veto){
   const {id,defender}=pending,u=active();
   if(veto){
     if(!pay(defender,3))return;
+    chronicle.reaction(publicCard('veto',defender));
+    if(chronicle.current)chronicle.current.status='Annullata';
     discard(defender.side,teams[defender.side].hand.indexOf('veto'));
     teams[defender.side].reaction=true;
     note(labels[defender.side]+' annulla l’incantesimo con Veto Arcano.');
@@ -666,7 +689,7 @@ function traverse(u,route,done,spendPm=false){
         if(v.id==='lightWall'){creations=creations.filter(w=>w!==v);damage(u,1);applyCondition(u,'Accecato');}
       }
       if(visible.includes(v)&&v.fired!==turn()&&sight(v.cell,center(destination),v.side,{ignored:v})){
-        v.fired=turn();damage(u,1);
+        v.fired=turn();chronicle.add('Ballista Animata '+labels[v.side]+' colpisce '+name(u)+'.');damage(u,1);
       }
     }
     const continueMovement=()=>{
@@ -696,6 +719,7 @@ function finishDash(){
 function reactDash(){
   const u=choice.unit,t=teams[u.side];
   if(!pay(u,1))return;
+  chronicle.reaction(publicCard('dash',u));
   discard(u.side,t.hand.indexOf('dash'));t.reaction=true;
   note(name(u)+' usa Scatto Fulmineo.');
   phase='dash';render();
@@ -717,6 +741,7 @@ function selectCell(c,selection=mode){
   }
   if(phase==='setup'){
     const placed=units[setup.shift()];placed.cell=c;
+    if(setup.length)inspected=setup[0];
     if(setup.length)show(units[setup[0]].side);else begin();
     return;
   }
@@ -730,6 +755,7 @@ function selectCell(c,selection=mode){
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
+    chronicle.begin({title:'Movimento',actor:name(u)});
     ritualReady=false;u.moved=true;
     traverse(u,route.route,spent=>{
       if(spent)note(name(u)+' si muove · '+spent+' PM.');
@@ -747,6 +773,7 @@ function charge(){
 function advance(){
   const u=active(),t=teams[u.side];
   if(t.hand.length>6)return;
+  chronicle.begin({title:'Caricamento',actor:name(u)});
   while(t.hand.length<6&&(t.deck.length||t.discard.length))draw(u.side);
   u.pe=4;u.pm=0;
   clearCurses();
@@ -757,6 +784,8 @@ function advance(){
   for(const [condition,applied] of Object.entries(u.conditions)){
     if(condition!=='Maledetto'&&applied<turn())delete u.conditions[condition];
   }
+  chronicle.observe(publicState());
+  if(chronicle.current)chronicle.current.status='Risolta';
   index=(index+1)%4;serial++;
   if(index===0){
     round++;
@@ -766,6 +795,7 @@ function advance(){
 }
 function ritualAction(){
   const u=active(),t=teams[u.side];
+  chronicle.begin({title:'Rituale',actor:name(u)});
   t.ritual++;t.reserve=Math.min(4,t.reserve+2);
   note(labels[u.side]+' completa il Rituale.');
   if(!victory(u.side))charge();else render();
@@ -847,6 +877,7 @@ function finishChoice(){
 function destroy(i){
   const u=active(),t=teams[u.side],e=barriers[1-u.side];
   if(!e||!pay(u,cards[t.hand[i]][1]))return;
+  chronicle.begin({title:'Distruzione della Barriera di Forza',actor:name(u)});
   discard(u.side,i);barriers[1-u.side]=null;ritualReady=false;
   note('Barriera di Forza distrutta.');render();
 }
@@ -1064,6 +1095,91 @@ function scheduleComputer(){
 }
 const actions=[];
 const attr=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+function unavailableReason(u,id){
+  const [,cost,type]=cards[id];
+  if(type.startsWith('Reazione'))return 'Si usa solo nella relativa finestra di Reazione: il gioco ti proporrà la scelta.';
+  if(phase!=='action'||u.side!==viewer||controllers[viewer]||presenting||animatingMovement)return 'Attendi la tua Fase di Azione.';
+  if(mode==='jump')return 'Completa prima il teletrasporto evidenziato.';
+  if(u.cell===null)return 'Il Simulacro deve prima rinascere.';
+  if(!affordable(u,cost))return 'PE insufficienti, anche usando la Riserva Arcana disponibile in questo turno.';
+  if(u.played.includes(id))return 'Hai già lanciato questo incantesimo nel turno.';
+  if(utilityReaction&&(!type.startsWith('Utilità')||utilityReaction.used||['remote','duplicate'].includes(id)))return 'Blocco Temporale permette un solo incantesimo Utilità compatibile.';
+  if(effectiveRange(u,type)==='Vista'&&has(u,'Accecato'))return 'Accecato: non puoi lanciare incantesimi a gittata Vista.';
+  if(isAttack(id)){
+    if(u.noAttack)return 'Un effetto ti impedisce di attaccare per il resto del turno.';
+    if(has(u,'Confuso')&&u.moved)return 'Confuso: hai scelto di muoverti e non puoi attaccare.';
+    if(u.attackTargets.length>=u.attackLimit)return 'Hai esaurito gli attacchi disponibili nel turno.';
+  }
+  const ally=units.find(v=>v.side===u.side&&v!==u);
+  if(id==='remote'&&ally.cell===null)return 'L’altro tuo Simulacro deve essere sul Labirinto.';
+  if(id==='inversion'&&(teams[u.side].ritual||ally.cell===null))return 'Richiede entrambi i tuoi Simulacri sul Labirinto e nessun punto rituale.';
+  if(id==='cleanse'&&!Object.keys(u.conditions).length)return 'Non hai Condizioni da rimuovere.';
+  if(id==='illumination'&&!teams[u.side].discard.length)return 'Non hai carte negli scarti.';
+  if(!untargetedSpells.has(id)&&!legalCells(id,u).length&&!targets(id).length)return 'Nessun bersaglio o posizione valida dalla tua origine attuale.';
+  return '';
+}
+function conditionInfo(u,c){
+  let effect=conditions[c];
+  if(c==='Rallentato')effect=u===active()&&!utilityReaction&&u.slowPenalty?
+    'Penalità già applicata: −'+u.slowPenalty+' PM all’inizio di questo turno.':
+    'Riduce di 2 i PM assegnati all’inizio del suo prossimo turno.';
+  const expiry=c==='Maledetto'?'Si rimuove quando è adiacente a un nemico.':
+    u===active()&&!utilityReaction&&u.conditions[c]<serial?'Si rimuove al Caricamento di questo turno.':
+    'Si rimuove al Caricamento del suo prossimo turno.';
+  return effect+' '+expiry;
+}
+function inspector(){
+  const u=units[inspected]??active();
+  const list=Object.keys(u.conditions);
+  const cube=creations.some(v=>v.id==='cube'&&v.side!==u.side&&v.cell===u.cell);
+  return '<section class="unit-inspector" aria-label="Stato del Simulacro"><h3>'+name(u)+'</h3><p>'+u.hp+' / '+maxHp(u)+' PF · '+u.pe+' PE'+(u===active()?' · '+u.pm+' PM':'')+'</p>'+
+    (u.cell===null?'<p>'+(phase==='setup'?'Non ancora schierato.':'Caduto · rinasce all’inizio del proprio turno.')+'</p>':'')+
+    (list.length?'<ul>'+list.map(c=>'<li><strong>'+c+'</strong><p>'+conditionInfo(u,c)+'</p></li>').join('')+'</ul>':'<p class="muted">Nessuna Condizione.</p>')+
+    (cube?'<p><strong>Nel Cubo nemico</strong> · perde 1 PF aggiuntivo quando subisce danni; uscire costa 2 PM.</p>':'')+
+    (u===active()&&u.noAttack?'<p>Un effetto impedisce di attaccare per il resto del turno.</p>':'')+'</section>';
+}
+function renderChronicle(){
+  const host=document.querySelector('#match-history');
+  host.hidden=false;
+  const perspective=matchMode==='solo'?controllers.findIndex(v=>!v):viewer;
+  const signature=JSON.stringify([chronicle.turns,perspective,historyLimit]);
+  if(signature===historySignature)return;
+  historySignature=signature;
+  const opened=new Set([...host.querySelectorAll('details[open]')].map(d=>d.dataset.history));
+  const known=new Set([...host.querySelectorAll('details[data-history]')].map(d=>d.dataset.history));
+  const scroll=host.querySelector('.full-history')?.scrollTop??0;
+  const enemy=[...chronicle.turns].reverse().find(t=>t.side!==perspective);
+  const cardText=c=>'<div class="history-card"><strong>'+attr(cards[c.id][0])+'</strong> · '+c.actor+
+    '<small>'+cards[c.id][2]+' · '+cards[c.id][1]+' PE</small><p>'+attr(cards[c.id][3])+'</p></div>';
+  const actionText=e=>'<li><strong>'+e.title+'</strong> <span class="outcome">'+e.status+'</span><p>'+e.actor+(e.target?' → '+e.target:'')+'</p>'+
+    (e.cards.length?'<details data-history="a'+e.id+'" '+(opened.has('a'+e.id)?'open':'')+'><summary>Testi delle carte'+(e.cards.length>1?' · incluse le Reazioni':'')+'</summary>'+e.cards.map(cardText).join('')+'</details>':'')+
+    (e.changes.length?'<details data-history="e'+e.id+'" '+(opened.has('e'+e.id)?'open':'')+'><summary>Conseguenze · '+e.changes.length+'</summary><ul>'+e.changes.map(c=>'<li>'+c+'</li>').join('')+'</ul></details>':'')+'</li>';
+  const turnText=(t,featured=false)=>{
+    const key=(featured?'f':'t')+t.id;
+    return '<details class="history-turn" data-history="'+key+'" '+(opened.has(key)||featured&&!known.has(key)?'open':'')+'><summary>Round '+t.round+' · '+t.unit+' · '+(t.complete?'concluso':'in corso')+'</summary>'+
+    (featured?'<p class="turn-recap">'+([...new Set(t.entries.flatMap(e=>e.changes).filter(c=>/ PF|caduto|rimossa|Creata:|Rimossa:|punti |: (Accecato|Vulnerabile|Pietrificato|Rallentato|Invisibile|Confuso|Maledetto)/.test(c)))].slice(-8).join(' · ')||'Le azioni e i relativi esiti sono elencati qui sotto.')+'</p>':'')+
+    (t.entries.length?'<ol>'+t.entries.map(actionText).join('')+'</ol>':'<p>Nessuna azione ancora eseguita.</p>')+'</details>';
+  };
+  host.innerHTML='<h2>Che cosa è successo</h2><p class="muted">Azioni in ordine di risoluzione. Apri una voce per leggere carte e conseguenze.</p>'+
+    '<section class="last-enemy"><h3>Ultimo turno avversario'+(matchMode==='spectator'?' · rispetto a '+labels[perspective]:'')+'</h3>'+
+    (enemy?turnText(enemy,true):'<p>Il tuo avversario non ha ancora svolto un turno.</p>')+'</section>'+
+    '<details class="full-history" data-history="all" '+(opened.has('all')?'open':'')+'><summary>Cronologia completa · '+chronicle.turns.length+' turni</summary>'+
+    [...chronicle.turns].reverse().slice(0,historyLimit).map(t=>turnText(t)).join('')+
+    (chronicle.turns.length>historyLimit?'<button type="button" id="older-history">Mostra turni precedenti</button>':'')+'</details>';
+  const full=host.querySelector('.full-history');if(full)full.scrollTop=scroll;
+}
+function renderAnnouncement(){
+  const host=document.querySelector('#action-caption'),entry=chronicle.current;
+  if(!entry){host.innerHTML='<strong>'+ (phase==='setup'?'Schieramento dei Simulacri':'Il turno è iniziato')+'</strong><span>Le carte giocate, i bersagli e gli esiti compariranno qui.</span><span>Consulta lo stato dei Simulacri nel pannello e il turno avversario nella cronologia.</span>';return;}
+  const expanded=host.querySelector('details')?.open;
+  const waiting=presenting||pending;
+  const state=waiting?'Lancio · in attesa di risoluzione':entry.status;
+  const latest=entry.cards.at(-1);
+  host.innerHTML='<strong>'+entry.title+'</strong><span>'+state+' · '+entry.actor+(entry.target?' → '+entry.target:'')+'</span>'+
+    (entry.cards.length>1?'<span>Reazioni: '+entry.cards.slice(1).map(c=>cards[c.id][0]).join(', ')+'</span>':'')+
+    (latest?'<details '+(expanded?'open':'')+'><summary>Leggi '+cards[latest.id][0]+'</summary><p>'+attr(cards[latest.id][3])+'</p></details>':'')+
+    (!waiting&&entry.changes.length?'<span class="announcement-result">'+entry.changes.slice(-2).join(' · ')+'</span>':'');
+}
 function button(label,fn,enabled=true,cls='',tip=''){
   const i=actions.push(fn)-1;
   const unavailable=(cls.startsWith('cell ')||cls.startsWith('card '))?(cls.startsWith('card ')?'aria-disabled="true"':'aria-disabled="true" tabindex="-1"'):'disabled';
@@ -1080,6 +1196,10 @@ function line(e,cls,fn,tip){
 function render(){
   if(!animatingMovement&&origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
   if(!animatingMovement&&utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
+  chronicle.observe(publicState());
+  if(chronicle.current&&chronicle.current.status!=='Annullata')chronicle.current.status=
+    pending?'In attesa di risoluzione':animatingMovement?'Movimento in corso':
+    ['reaction','afterDamage','dash','selection','choice','probe'].includes(phase)||mode==='jump'?'Scelta in corso':'Risolta';
   actions.length=0;
   const u=active(),t=teams[u.side];
   const automated=Boolean(controllers[viewer]);
@@ -1138,12 +1258,14 @@ function render(){
   if(handSide!==null){
     const side=handSide;
     hand=orderedHand(teams[side].hand).map(({id,i,label,cost,type,range,description},position,entries)=>{
-      const playable=interactiveHand&&phase==='action'&&mode!=='jump'&&canPlay(u,id);
+      const reason=unavailableReason(u,id);
+      const playable=interactiveHand&&phase==='action'&&mode!=='jump'&&canPlay(u,id)&&!reason;
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
       const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary;
-      const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description;
+      const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description+
+        (phase==='action'?'\n\n'+(reason?'Indisponibile: '+reason:'Disponibile. Seleziona la carta, poi scegli tra le posizioni evidenziate se richiesto.'):'');
       if(!interactiveHand)return button(content,()=>{},false,appearance,tooltip);
       if(phase==='charge'){
         return '<div class="discard-card">'+button(content,()=>{},true,appearance,tooltip)+
@@ -1161,29 +1283,31 @@ function render(){
   turnBar.className=viewer?'turn-blue':'turn-red';
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
-  turnBar.textContent='Round '+round+' · '+(automated&&phase!=='end'?publicTitle:choiceTitle??title);
+  const turnUnit=utilityReaction?units[utilityReaction.order[utilityReaction.index]]:u;
+  turnBar.textContent=phase==='end'?'Vince l’Arcimago '+labels[winner]:
+    'Round '+round+' · Turno: '+(phase==='setup'?'Evocazione':name(turnUnit))+' · Decide: '+labels[viewer]+(automated?' (computer)':'');
   const instruction=presenting?'Lancio in corso · '+cards[pending.id][0]+'.'
     :animatingMovement?'Movimento in corso.'
     :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
     :choice?.text??prompt??'Completa la scelta o termina il Turno.';
-  const historyOpen=root.querySelector('details')?.open;
   root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
     (hand?'<section class="hand"><h3>'+(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide])+'</h3><div class="cards">'+hand+'</div></section>':'')+
-    '<p class="key">▲ Terra · ϟ Fulmine · ◉ Zona Rituale · ✦ Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div>'+
-    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<div class="stats">'+k.type+' · '+k.hp+' PF · '+k.pe+' PE'+(k===u&&phase!=='setup'?' · '+k.pm+' PM':'')+'</div>').join('')+'</div>').join('')+
-    (hand?'<div id="card-detail" class="card-detail"></div>':'')+
-    (log.length?'<p class="muted">'+log[0]+'</p><details '+(historyOpen?'open':'')+'><summary>Registro</summary><ul class="log">'+log.slice(0,15).map(l=>'<li>'+l+'</li>').join('')+'</ul></details>':'')+'</aside></div>';
+    '<p class="key">▲ Terra · ϟ Fulmine · ◉ Zona Rituale · ✦ Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div>'+inspector()+
+    (hand?'<div id="card-detail" class="card-detail" role="status"></div>':'')+
+    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" aria-label="Esamina '+name(k)+'" aria-pressed="'+(inspected===k.id)+'" class="unit-summary"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
+    '</aside></div>';
   previewCard();
   feedback.update({units,teams,creations,phase,winner,moving:animatingMovement,active:u.id,labels,viewerLabel:labels[viewer],choiceText:choice?.text,
     pending:pending?{from:spellOrigin(u),to:pending.defender.cell,label:cards[pending.id][0]+' → '+name(pending.defender)}:null,
     events:visualEvents});
   visualEvents=[];
+  renderAnnouncement();renderChronicle();
   scheduleComputer();
 }
 function previewCard(card=root.querySelector('.card.selected')){
   const detail=root.querySelector('#card-detail');
-  if(detail)detail.textContent=card?.title||'Passa su una carta per leggerne l’effetto.';
+  if(detail)detail.textContent=card?.title||'Carte: seleziona o passa sopra per leggere effetto e vincoli, anche se indisponibili.';
 }
 root.addEventListener('pointerover',event=>{
   const card=event.target.closest('.card');
@@ -1195,13 +1319,17 @@ root.addEventListener('pointerover',event=>{
     for(const node of list)node.classList.remove('route-preview');
     if(path){
       path.route.forEach(c=>list[c].classList.add('route-preview'));
-      document.querySelector('#action-caption').textContent='Percorso · '+path.cost+' PM';
+      document.querySelector('#route-caption').textContent='Percorso · '+path.cost+' PM';
     }
   }
 });
 root.addEventListener('pointerout',event=>{
   const card=event.target.closest('.card');
   if(card&&!card.contains(event.relatedTarget))previewCard();
+  if(event.target.closest('.cell.legal')){
+    root.querySelectorAll('.route-preview').forEach(node=>node.classList.remove('route-preview'));
+    document.querySelector('#route-caption').textContent='';
+  }
 });
 root.addEventListener('focusin',event=>{
   if(event.target.matches('.card'))previewCard(event.target);
@@ -1210,7 +1338,10 @@ root.addEventListener('focusout',event=>{
   if(event.target.matches('.card'))previewCard();
 });
 root.addEventListener('click',event=>{
+  const unit=event.target.closest('[data-inspect]');
+  if(unit){inspected=Number(unit.dataset.inspect);render();root.querySelector('[data-inspect="'+inspected+'"]')?.focus();return;}
   const b=event.target.closest('button[data-action]');
+  if(b?.matches('.card[aria-disabled="true"]')){previewCard(b);return;}
   if(b?.matches('.discard-card .card')){previewCard(b);return;}
   if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true')actions[Number(b.dataset.action)]?.();
 });
@@ -1290,6 +1421,7 @@ document.querySelector('#main-menu').onclick=()=>{
   clearTimeout(botTimer);
   cancelMovementAnimation();
   feedback.reset();document.querySelector('#action-caption').textContent='';
+  document.querySelector('#match-history').hidden=true;document.querySelector('#route-caption').textContent='';
   matchHeader.hidden=true;
   logExport.hidden=true;
   root.hidden=true;
@@ -1300,3 +1432,6 @@ document.querySelector('#main-menu').onclick=()=>{
 
 const reducedMotion=document.querySelector('#reduce-motion');
 reducedMotion.checked=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+document.querySelector('#match-history').addEventListener('click',event=>{
+  if(event.target.id==='older-history'){historyLimit+=12;renderChronicle();}
+});
