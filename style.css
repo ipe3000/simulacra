@@ -77,6 +77,16 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .board{background:#66534e url('./dungeon.png?v=4') center/101.923% 104.167% no-repeat;image-rendering:pixelated;outline:2px solid #ac9061;border:0}
 .cell{box-shadow:none;border:1px solid #291b2059}
 
+/* Plain stone bases mask the old map marks; the sigils sit below game pieces. */
+.cell.redzone::before,.cell.bluezone::before,.cell.ritual::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  background:var(--zone-sigil) center/100% 100% no-repeat;
+}
+.cell.redzone,.cell.bluezone,.cell.ritual{isolation:isolate}
+.cell.redzone{--zone-sigil:url('./sprites/zone-summoning.svg')}
+.cell.bluezone{--zone-sigil:url('./sprites/zone-summoning-blue.svg')}
+.cell.ritual{--zone-sigil:url('./sprites/zone-ritual.svg')}
+
 
 
 .cell.legal,.cell.legal:hover:not([aria-disabled=true]){background:#ffd98728;box-shadow:inset 0 0 0 2px #ffd987}

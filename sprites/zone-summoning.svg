@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A plain stone plinth; all ornament belongs to the floating sigil. -->
+  <path fill="#463936" d="M3 5h26v25H3z"/>
+  <path fill="#76615a" d="M3 3h26v25H3z"/>
+  <path fill="#392d30" d="m16 5 3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/>
+  <path fill="#b86e60" d="m16 6 3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/>
+  <path fill="#f1b59b" d="m16 8 2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>
+  <path fill="#ffe4bc" d="m16 10 1 4 4 1-4 1-1 4-1-4-4-1 4-1z"/>
+  <path fill="#edab92" d="m7 6 1 2 2 1-2 1-1 2-1-2-2-1 2-1zm18 14 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/>
+</svg>
