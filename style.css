@@ -114,10 +114,10 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 
 /* Plain stone bases mask the old map marks; the sigils sit below game pieces. */
 .cell.redzone::before,.cell.bluezone::before,.cell.ritual::before{
-  content:"";position:absolute;inset:0;pointer-events:none;z-index:-1;
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
   background:var(--zone-sigil) center/100% 100% no-repeat;
 }
-.cell.redzone,.cell.bluezone,.cell.ritual{isolation:isolate}
+.cell.redzone,.cell.bluezone,.cell.ritual{isolation:auto}
 .cell.redzone{--zone-sigil:url('./sprites/zone-summoning.svg?v=2')}
 .cell.bluezone{--zone-sigil:url('./sprites/zone-summoning-blue.svg?v=2')}
 .cell.ritual{--zone-sigil:url('./sprites/zone-ritual.svg')}
@@ -136,15 +136,15 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .token.active{outline-color:#ffd987}
 
 /* Creazioni e Simulacri in pixel art */
-.token,.token.blue{display:inline-block;width:94%;height:94%;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated;vertical-align:middle;filter:drop-shadow(0 1px 1px #25191b)}
+.token,.token.blue{display:inline-block;position:relative;z-index:4;width:94%;height:94%;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated;vertical-align:middle;filter:drop-shadow(0 1px 1px #25191b)}
 .token::before{content:none}
-.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=2')}
-.token.lightning{--sprite:url('./sprites/mage-0-lightning.png?v=2')}
-.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=2')}
-.token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png?v=2')}
+.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=3')}
+.token.lightning{--sprite:url('./sprites/mage-0-lightning.png?v=3')}
+.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=3')}
+.token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png?v=3')}
 .token.active{outline-offset:-2px}
 .token.on-creation{width:66%;height:66%;translate:12% -12%}
-.creation{position:absolute;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
+.creation{position:absolute;z-index:1;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
 .creation.cube{--sprite:url('./sprites/cube.png?v=2')}
 .creation.ballista{--sprite:url('./sprites/ballista.png?v=3')}
 .creation::after,.edge.barrier::after{content:"";position:absolute;width:5px;height:5px;background:#f1a085;box-shadow:0 0 0 1px #302225}
