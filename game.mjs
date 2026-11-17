@@ -1,6 +1,7 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 import catalog from './catalogo-carte.json' with {type:'json'};
 import {chooseComputerAction} from './computer.mjs?v=2';
+import {createFeedback} from './feedback.mjs?v=1';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -94,6 +95,14 @@ function shuffle(deck){
 }
 const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
+const feedback=createFeedback(root);
+let visualEvents=[],presentationTimer,presenting=false;
+const signal=(label,unit,kind='magic',symbol)=>visualEvents.push({label,cell:unit?.cell,side:unit?.side,kind,symbol});
+function present(done){
+  if(!feedback.enabled()||feedback.reduced()){done();return;}
+  presenting=true;render();
+  presentationTimer=setTimeout(()=>{presenting=false;done();},420*feedback.speed());
+}
 let controllers=[null,null], matchMode='local', botTimer, paused=true, botStopped=false;
 let movementTimer, animatingMovement=false;
 const spectatorControls=document.querySelector('#spectator-controls');
@@ -123,6 +132,8 @@ const free=c=>!at(c)&&!creations.some(v=>v.cell===c);
 function start(){
   clearTimeout(botTimer);
   cancelMovementAnimation();
+  feedback.reset();visualEvents=[];
+  document.querySelector('#action-caption').textContent='';
   logExport.hidden=true;
   copyMatchLog.textContent='Copia registro partita';
   paused=true;botStopped=false;
@@ -357,7 +368,9 @@ function choose(text,options,side=active().side,positions){
   choice={text,options,positions};phase='selection';show(side);
 }
 function resume(){
-  choice=null;mode='move';if(phase!=='end')phase='action';clearCurses();show(active().side);
+  choice=null;mode='move';
+  if(phase!=='end')phase=active().cell===null&&!utilityReaction?'charge':'action';
+  clearCurses();show(active().side);
 }
 function chooseCell(text,positions,apply,done=resume,optional=true,side=active().side){
   if(!positions.length){done();return;}
@@ -409,6 +422,7 @@ function cast(id){
   u.played.push(id);
   ritualReady=false;
   note(labels[u.side]+' lancia '+cards[id][0]+'.');
+  signal(name(u)+' · '+cards[id][0],u,u.type==='Terra'?'earth-effect':'lightning-effect');
   if(utilityReaction)utilityReaction.used=true;
   if(origin)origin.consumed=true;
   return true;
@@ -422,7 +436,7 @@ function offerReaction(u,id,apply,pass){
   choose('Reazione · '+name(u),[[cards[id][0],()=>{
     if(!pay(u,cards[id][1]))return;
     discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
-    note(name(u)+' usa '+cards[id][0]+'.');apply();
+    note(name(u)+' usa '+cards[id][0]+'.');signal(name(u)+' · '+cards[id][0],u);apply();
   },{reaction:id,unit:u}],['Passa',pass]],u.side);
   return true;
 }
@@ -479,7 +493,7 @@ function targetUnit(c){
     });
     return;
   }
-  offerVeto();
+  present(offerVeto);
 }
 function movementReactions(u,from,to,done){
   const enemies=units.filter(v=>v.side!==u.side&&v.cell!==null);
@@ -513,7 +527,7 @@ function offerVeto(){
     phase='reaction';mode='move';show(defender.side);
   }else resolve(false);
 }
-function additionalEffect(id,u,v){
+function additionalEffect(id,u,v,hitCell=v.cell){
   const live=v.cell!==null;
   if(id==='wave'&&live){moveEffect(v,movementCells(v,3));return true;}
   if(id==='fist'&&live){
@@ -532,8 +546,9 @@ function additionalEffect(id,u,v){
     select(['Confuso','Vulnerabile','Accecato','Rallentato']);return true;
   }
   if(id==='necrotic'||id==='corrode'){chooseDiscard(v.side,2,resume);return true;}
-  if(id==='fireball'&&live){
-    const other=units.filter(w=>w!==v&&w.side===v.side&&w.cell!==null&&near(v,3).has(w.cell));
+  if(id==='fireball'){
+    const reach=near({...v,cell:hitCell},3);
+    const other=units.filter(w=>w!==v&&w.side===v.side&&w.cell!==null&&reach.has(w.cell));
     choose('Scegli il secondo bersaglio',[...other.map(w=>[name(w),()=>{damage(w,1);resume();}]),['Continua',resume]]);
     return true;
   }
@@ -589,10 +604,11 @@ function resolve(veto){
     discard(defender.side,teams[defender.side].hand.indexOf('veto'));
     teams[defender.side].reaction=true;
     note(labels[defender.side]+' annulla l’incantesimo con Veto Arcano.');
+    signal('Veto Arcano · incantesimo annullato',defender,'veto-effect','⊘');
   }
   phase='action';pending=null;mode='move';
   const effect=attacks[id];
-  const before=defender.hp;
+  const before=defender.hp,hitCell=defender.cell;
   if(veto||isAttack(id))damage(defender,veto||id==='arc'?1:effect?.damage??2);
   if(!veto&&phase!=='end'){
     applyCondition(defender,effect?.condition??afflictions[id]);
@@ -606,7 +622,7 @@ function resolve(veto){
     if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
     if(!veto){
-      const continueEffect=()=>{if(!additionalEffect(id,u,defender))show(u.side);};
+      const continueEffect=()=>{if(!additionalEffect(id,u,defender,hitCell))show(u.side);};
       if(defender.cell!==null&&defender.hp<before&&canReact(defender,'dash')){
         choice={unit:defender,resume:mode,done:continueEffect};phase='afterDamage';show(defender.side);return;
       }
@@ -657,10 +673,10 @@ function traverse(u,route,done,spendPm=false){
       if(u.cell===null||phase==='end'){finish();return;}
       movementReactions(u,from,destination,()=>u.cell===destination?step(i+1):finish());
     };
-    if(!controllers[u.side]){continueMovement();return;}
+    if(!controllers[u.side]&&(!feedback.enabled()||feedback.reduced())){continueMovement();return;}
     animatingMovement=true;
     render();
-    const delay=matchMode==='spectator'?Math.max(100,Number(computerSpeed.value)*.48):240;
+    const delay=feedback.reduced()?0:(matchMode==='spectator'?Math.max(220,Number(computerSpeed.value)*.48):240)*feedback.speed();
     movementTimer=setTimeout(()=>{
       animatingMovement=false;
       continueMovement();
@@ -670,6 +686,7 @@ function traverse(u,route,done,spendPm=false){
 }
 function cancelMovementAnimation(){
   clearTimeout(movementTimer);
+  clearTimeout(presentationTimer);presenting=false;
   animatingMovement=false;
 }
 function finishDash(){
@@ -775,7 +792,8 @@ function pick(id){
     if(id==='frenzy')u.attackLimit=2;
     if(id==='inversion'){swapUnits(u,ally);return;}
     if(id==='karmic'){
-      if(order[0]===u.side){draw(u.side);draw(u.side);}
+      const turnOrder=utilityReaction?.order??order;
+      if(turnOrder[0]===u.side){draw(u.side);draw(u.side);}
       else{nextFirst=u.side;damage(u,1);}
     }
     if(id==='vortex'){
@@ -824,7 +842,7 @@ function pick(id){
   mode=mode===id?'move':id;render();
 }
 function finishChoice(){
-  choice=null;if(phase!=='end')phase='action';render();
+  resume();
 }
 function destroy(i){
   const u=active(),t=teams[u.side],e=barriers[1-u.side];
@@ -880,7 +898,7 @@ function cardChoice(option,where){
 }
 
 function computerTurn(){
-  if(phase==='end'||botStopped||animatingMovement||!controllers[viewer])return;
+  if(phase==='end'||botStopped||animatingMovement||presenting||!controllers[viewer])return;
   const side=viewer, level=controllers[side], u=active(), t=teams[side];
   const unit=phase==='setup'?units[setup[0]]:phase==='dash'||phase==='afterDamage'?choice.unit:choice?.moving??u;
   const hand=orderedHand(t.hand);
@@ -1040,9 +1058,9 @@ function scheduleComputer(){
   const finished=phase==='end'||botStopped;
   document.querySelector('#copy-match-log').hidden=matchMode==='local';
   toggleComputers.disabled=finished;
-  stepComputers.disabled=finished||!paused||animatingMovement;
-  if(finished||animatingMovement||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
-  botTimer=setTimeout(computerTurn,matchMode==='spectator'?Number(computerSpeed.value):320);
+  stepComputers.disabled=finished||!paused||animatingMovement||presenting;
+  if(finished||animatingMovement||presenting||!controllers[viewer]||(matchMode==='spectator'&&paused))return;
+  botTimer=setTimeout(computerTurn,Math.max(feedback.wait(),matchMode==='spectator'?Number(computerSpeed.value):320));
 }
 const actions=[];
 const attr=s=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
@@ -1065,7 +1083,7 @@ function render(){
   actions.length=0;
   const u=active(),t=teams[u.side];
   const automated=Boolean(controllers[viewer]);
-  const visible=viewer!==null&&!automated&&!animatingMovement;
+  const visible=viewer!==null&&!automated&&!animatingMovement&&!presenting;
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
   const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
@@ -1084,7 +1102,7 @@ function render(){
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
     return button((object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
-      (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
+      (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span><span class="condition-badges">'+Object.keys(token.conditions).map(k=>'<span title="'+attr(k+' · '+conditions[k])+'">'+({Accecato:'◉',Vulnerabile:'!',Pietrificato:'◆',Rallentato:'⌛',Invisibile:'◌',Confuso:'?',Maledetto:'☠'}[k])+'<span class="sr">'+k+'</span></span>').join('')+'</span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
       ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
@@ -1144,7 +1162,8 @@ function render(){
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
   turnBar.textContent='Round '+round+' · '+(automated&&phase!=='end'?publicTitle:choiceTitle??title);
-  const instruction=animatingMovement?'Movimento in corso.'
+  const instruction=presenting?'Lancio in corso · '+cards[pending.id][0]+'.'
+    :animatingMovement?'Movimento in corso.'
     :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
     :choice?.text??prompt??'Completa la scelta o termina il Turno.';
@@ -1156,6 +1175,10 @@ function render(){
     (hand?'<div id="card-detail" class="card-detail"></div>':'')+
     (log.length?'<p class="muted">'+log[0]+'</p><details '+(historyOpen?'open':'')+'><summary>Registro</summary><ul class="log">'+log.slice(0,15).map(l=>'<li>'+l+'</li>').join('')+'</ul></details>':'')+'</aside></div>';
   previewCard();
+  feedback.update({units,teams,creations,phase,winner,moving:animatingMovement,active:u.id,labels,viewerLabel:labels[viewer],choiceText:choice?.text,
+    pending:pending?{from:spellOrigin(u),to:pending.defender.cell,label:cards[pending.id][0]+' → '+name(pending.defender)}:null,
+    events:visualEvents});
+  visualEvents=[];
   scheduleComputer();
 }
 function previewCard(card=root.querySelector('.card.selected')){
@@ -1165,6 +1188,16 @@ function previewCard(card=root.querySelector('.card.selected')){
 root.addEventListener('pointerover',event=>{
   const card=event.target.closest('.card');
   if(card)previewCard(card);
+  const cell=event.target.closest('.cell.legal');
+  if(cell&&phase==='action'&&mode==='move'&&!animatingMovement&&!presenting){
+    const list=[...root.querySelectorAll('.cell')],destination=list.indexOf(cell);
+    const path=walk(active()).get(destination);
+    for(const node of list)node.classList.remove('route-preview');
+    if(path){
+      path.route.forEach(c=>list[c].classList.add('route-preview'));
+      document.querySelector('#action-caption').textContent='Percorso · '+path.cost+' PM';
+    }
+  }
 });
 root.addEventListener('pointerout',event=>{
   const card=event.target.closest('.card');
@@ -1256,6 +1289,7 @@ document.querySelector('#main-menu').onclick=()=>{
   if(phase!=='end'&&!confirm('Tornare al menu principale? La partita in corso terminerà.'))return;
   clearTimeout(botTimer);
   cancelMovementAnimation();
+  feedback.reset();document.querySelector('#action-caption').textContent='';
   matchHeader.hidden=true;
   logExport.hidden=true;
   root.hidden=true;
@@ -1263,3 +1297,6 @@ document.querySelector('#main-menu').onclick=()=>{
   titleScreen.hidden=false;
   (matchMode==='solo'?startSolo:matchMode==='spectator'?startSpectator:startLocal).focus();
 };
+
+const reducedMotion=document.querySelector('#reduce-motion');
+reducedMotion.checked=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;

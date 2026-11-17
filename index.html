@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=8">
+<link rel="stylesheet" href="./style.css?v=9">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -64,8 +64,13 @@
   <button id="reset" type="button">Nuova partita</button>
   <button id="copy-match-log" type="button" hidden title="Il registro include le carte considerate nelle decisioni dei computer">Copia registro partita</button>
   <button id="main-menu" type="button">Menu principale</button>
+  <details class="animation-settings"><summary>Animazioni</summary>
+    <label>Ritmo <select id="animation-speed"><option value="1.5">Lento</option><option value="1" selected>Normale</option><option value="0.6">Rapido</option></select></label>
+    <label><input id="reduce-motion" type="checkbox"> Riduci movimento</label>
+  </details>
 </header>
+<p id="action-caption" class="action-caption" role="status" aria-live="polite"></p>
 <textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
 <main id="game" hidden></main>
-<script type="module" src="./game.mjs?v=10"></script>
+<script type="module" src="./game.mjs?v=11"></script>
 </html>
