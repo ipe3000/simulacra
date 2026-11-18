@@ -110,7 +110,7 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .card-detail{border-color:#7b805e}
 .team strong,#turn.turn-red{color:#f5a086}
 .team.blue strong,#turn.turn-blue{color:#adc5ec}
-.board{background:#c4a887 url('./dungeon.png?v=5') center/101.895206% 103.864734% no-repeat;image-rendering:auto;outline:2px solid #ac9061;border:0}
+.board{background:#c4a887 url('./dungeon.webp?v=1') center/101.895206% 103.864734% no-repeat;image-rendering:auto;outline:2px solid #ac9061;border:0}
 .cell{box-shadow:none;border:1px solid #6b50341a}
 
 /* Shared cell centers keep summoning rows and the ritual column aligned. */
@@ -140,28 +140,25 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 /* Creazioni e Simulacri in pixel art */
 .token,.token.blue{display:inline-block;position:relative;z-index:4;width:94%;height:94%;background:var(--sprite) center/contain no-repeat;image-rendering:auto;vertical-align:middle;filter:drop-shadow(0 1px 1px #25191b)}
 .token::before{content:none}
-.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=8')}
+.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=9')}
 .token.lightning{--sprite:url('./sprites/mage-0-lightning.png?v=7')}
-.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=8')}
+.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=9')}
 .token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png?v=7')}
 .token.active{outline-offset:-2px}
 .token.on-creation{width:66%;height:66%;translate:12% -12%}
-.creation{position:absolute;z-index:1;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
-.creation.cube{--sprite:url('./sprites/cube.png?v=2')}
-.creation.ballista{--sprite:url('./sprites/ballista.png?v=3')}
-.creation::after,.edge.barrier::after{content:"";position:absolute;width:5px;height:5px;background:#f1a085;box-shadow:0 0 0 1px #302225}
+.creation{position:absolute;z-index:1;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:auto;filter:drop-shadow(0 2px 2px #30231b66)}
+.creation.cube{--sprite:url('./sprites/cube.png?v=3')}
+.creation.ballista{--sprite:url('./sprites/ballista.png?v=4')}
+.creation::after,.edge.barrier::after{content:"";position:absolute;width:6px;height:6px;border-radius:50%;background:#f1a085;box-shadow:0 0 0 1px #302225,0 1px 2px #221c1977}
 .creation.blue::after,.edge.barrier.blue::after{background:#adc5ec}
 .creation::after{bottom:2px;right:2px}
-.edge.barrier{height:8px;translate:0 -4px;border:0;border-radius:0}
+.edge.barrier{height:12px;translate:0 -6px;border:0;border-radius:3px;filter:drop-shadow(0 1px 2px #261e2855)}
 .edge.barrier::after{right:3px;bottom:-3px}
-.edge.barrier.force{background:linear-gradient(#543641 0 12%,#ffe0b8 12% 35%,#ac6a74 35% 76%,#70444c 76%)}
-.edge.barrier.spiritWall{background:#4e7569;box-shadow:inset 0 1px #a9cbbc,inset 0 -1px #274239}
-.edge.barrier.spiritWall::before{content:"✦";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:bold 14px/1 monospace;color:#fff0bd;background:#35564c;padding:0 2px;text-shadow:1px 1px #254237}
-.edge.barrier.illusion{background:repeating-linear-gradient(135deg,#765382 0 4px,#c39acd 4px 6px,#765382 6px 10px),#765382;box-shadow:inset 0 1px #c39acd,inset 0 -1px #47314f}
-.edge.barrier.lightWall{background:linear-gradient(#9c7146 0 25%,#ffce78 25% 40%,#fff3c2 40% 65%,#e6aa60 65%)}
-.edge.barrier.portal{height:14px;translate:0 -5px;background:#736461;box-shadow:none}
-.edge.barrier.portal.vertical{height:11px;translate:0 -5px}
-.edge.barrier.portal::before{content:"";position:absolute;inset:0;opacity:.6;background:repeating-linear-gradient(90deg,transparent 0 7px,#414447 7px 8px),linear-gradient(#c1c3c4 0 15%,#9d9fa1 15% 45%,#737578 45% 82%,#414447 82%)}
+.edge.barrier.force{background:url('./sprites/barrier-force.svg') center/100% 100% no-repeat}
+.edge.barrier.spiritWall{background:url('./sprites/barrier-spirit.svg') center/100% 100% no-repeat}
+.edge.barrier.illusion{background:url('./sprites/barrier-illusion.svg') center/100% 100% no-repeat}
+.edge.barrier.lightWall{background:url('./sprites/barrier-light.svg') center/100% 100% no-repeat}
+.edge.barrier.portal,.edge.barrier.portal.vertical{height:14px;translate:0 -7px;background:url('./sprites/barrier-portal.svg') center/100% 100% no-repeat;box-shadow:none}
 .card .card-type{display:block;margin:-5px -5px 4px;padding:2px 4px;background:var(--card-type);color:#fff5e5;font-size:11px;font-weight:700}
 .card.attack{--card-type:#873d3f}
 .card.reaction{--card-type:#3f587e}
