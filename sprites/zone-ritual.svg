@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <path fill="#463936" d="M3 5h26v25H3z"/>
-  <path fill="#76615a" d="M3 3h26v25H3z"/>
-  <g fill="none" stroke-linejoin="round">
-    <circle cx="16" cy="15" r="10" stroke="#384238" stroke-width="3"/>
-    <circle cx="16" cy="15" r="10" stroke="#a6bc81" stroke-width="1.5"/>
-    <path d="m16 7 4.7 14.5-12.3-9h15.2l-12.3 9z" stroke="#d0d6a0" stroke-width="1"/>
-  </g>
-  <path fill="#f4e7b6" d="m16 12 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/>
-  <path fill="#e3dcaa" d="M15 4h2v2h-2zm10 10h2v2h-2zM15 24h2v2h-2zM5 14h2v2H5z"/>
-</svg>
+<defs><path id="star" d="M16 6.5L21.584 23.686L6.965 13.064H25.035L10.416 23.686Z"/></defs>
+<g fill="none" stroke-linejoin="round">
+<circle cx="16" cy="16" r="10.7" stroke="#171a10" stroke-width="2.2"/>
+<circle cx="16" cy="16" r="10.7" stroke="#81cb38" stroke-width="1.8"/>
+<use href="#star" stroke="#15190d" stroke-width="1.7"/>
+<use href="#star" stroke="#81cb38" stroke-width="1.3"/>
+</g>
+<g fill="#98df48" stroke="#15190d" stroke-width=".22">
+<circle cx="16" cy="5.3" r=".85"/><circle cx="26.18" cy="12.69" r=".85"/><circle cx="22.29" cy="24.66" r=".85"/><circle cx="9.71" cy="24.66" r=".85"/><circle cx="5.82" cy="12.69" r=".85"/>
+</g></svg>
