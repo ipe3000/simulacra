@@ -1196,6 +1196,15 @@ function line(e,cls,fn,tip){
   const i=actions.push(fn)-1;
   return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
 }
+function zoneWallClasses(c){
+  const [x,y]=xy(c);
+  return ['top','right','bottom','left'].filter(side=>walls.some(([a,b,d,e])=>
+    side==='top'?b===e&&b===y&&a<=x&&d>=x+1:
+    side==='bottom'?b===e&&b===y+1&&a<=x&&d>=x+1:
+    side==='left'?a===d&&a===x&&b<=y&&e>=y+1:
+    a===d&&a===x+1&&b<=y&&e>=y+1
+  )).map(side=>' zone-wall-'+side).join('');
+}
 function render(){
   if(!animatingMovement&&origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
   if(!animatingMovement&&utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
@@ -1226,7 +1235,7 @@ function render(){
     ].filter(Boolean).join('\n');
     return button((object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
       (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span><span class="condition-badges">'+Object.keys(token.conditions).map(k=>'<span title="'+attr(k+' · '+conditions[k])+'">'+({Accecato:'◉',Vulnerabile:'!',Pietrificato:'◆',Rallentato:'⌛',Invisibile:'◌',Confuso:'?',Maledetto:'☠'}[k])+'<span class="sr">'+k+'</span></span>').join('')+'</span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
-      ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
+      ()=>selectCell(c),legal,'cell '+z+(z?zoneWallClasses(c):'')+(legal?' legal':''),tip);
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
   barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier force '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
