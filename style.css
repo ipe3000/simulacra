@@ -75,7 +75,8 @@ dialog{color:inherit;background:#242523;border:1px solid var(--gold);border-radi
 @media(max-width:900px){.layout{grid-template-columns:1fr}header,main{padding:14px}.panel{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 .wall::before{content:"";position:absolute;inset:0 -3px;background:inherit;border-radius:inherit}.wall{translate:0 -3px}
 .wall,.edge.barrier{pointer-events:auto}.wall::before{pointer-events:auto}
-.cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:revert-layer}
+/* Keep unavailable cells transparent instead of reverting to the browser's button face. */
+.cell[aria-disabled=true]{cursor:default}.cell[aria-disabled=true]:hover{background-color:transparent}
 .status.turn-red{border-inline-start:5px solid #ffac99}.status.turn-red .eyebrow{color:#ffac99}.status.turn-blue{border-inline-start:5px solid #a4d2ff}.status.turn-blue .eyebrow{color:#a4d2ff}
 
 header{padding-block:6px;gap:14px;min-height:48px}main{padding-top:10px}
