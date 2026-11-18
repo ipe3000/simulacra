@@ -96,6 +96,8 @@ function score(action,state){
   const {kind,card,target,label}=action;
   const {phase,mode,unit,own,hand,cards,attacks,afflictions,level}=state;
   if(kind==='end'||kind==='skip')return 0;
+  if(kind==='rebirth')return Math.max(...state.rebirthPlans.filter(p=>p.bonus===action.bonus).map(p=>
+    positionValue(unit,p.cell,state)-positionValue(unit,unit.cell,state)-p.cost*.12+p.attack*.77));
   if(kind==='ritual')return !own.ritual?(own.kills>=2?120:12):own.reserve<=2?3:-.2;
   if(kind==='reaction')return reactionScore(action,state);
   if(kind==='discard')return (hand.length>6?3:0)-cardValue(card,state)-(hand.filter(id=>id===card).length===1?.25:0);

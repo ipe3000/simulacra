@@ -38,6 +38,8 @@ test('Ribaltamento Karmico ends the action phase when its caster dies',()=>{
   assert.equal(game.run('phase'),'spawn');
   game.run('selectCell(legalCells()[0])');
   assert.equal(game.run('active().hp'),8);
+  assert.equal(game.run('choice.intent'),'rebirth');
+  game.run('choice.options[1][1]()');
   assert.equal(game.run('phase'),'action');
 });
 

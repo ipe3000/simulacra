@@ -6,6 +6,8 @@ In Giocatore vs Computer scegli il tuo Arcimago e la difficoltà dell’avversar
 
 Il prototipo usa la configurazione illustrata nel regolamento 5.1 e il catalogo di 70 carte, oltre a Colpo Arcano. Ogni Arcimago pesca sei carte da un grimorio casuale di 30 carte, composto da 4 Reazioni, 8 Attacchi e 18 Utilità. Il catalogo è in catalogo-carte.json. Ricaricare la pagina avvia una nuova partita.
 
+Nel turno in cui rinasce, prima di compiere azioni, il Simulacro può scegliere di rinunciare agli Attacchi per ottenere PM aggiuntivi pari al proprio Movimento base: 4 per Terra, 5 per Fulmine. Il bonus si somma agli altri modificatori e termina con il turno. Anche i computer valutano questa scelta.
+
 Per avviare in locale, eseguire `python -m http.server 8000` e aprire `http://localhost:8000/`.
 
 Le animazioni evidenziano chi lancia un incantesimo, il bersaglio e le finestre di Reazione. Danni e Condizioni compaiono sulla plancia; il movimento segue il percorso casella per casella anche nelle partite locali. Il menu Animazioni regola il ritmo e permette di ridurre il movimento, rispettando inizialmente la preferenza del sistema.

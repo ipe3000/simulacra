@@ -244,12 +244,14 @@ function passable(u,a,b){
   return !(barriers[1-u.side]&&same(e,barriers[1-u.side]));
 }
 function legalCells(selection=mode,u=active()){
-  const mode=selection;
   if(phase==='setup')return zones[units[setup[0]].side].filter(c=>!at(c));
   if(phase==='spawn')return respawn(zones[u.side],free);
   if(phase==='dash')return [...near(choice.unit,3).keys()].filter(c=>!at(c));
   if(phase==='selection')return choice.positions??[];
   if(phase!=='action')return [];
+  return actionCells(selection,u);
+}
+function actionCells(mode,u){
   if(cards[mode]&&effectiveRange(u,cards[mode][2])==='Vista'&&has(u,'Accecato'))return [];
   if(mode==='move')return utilityReaction||origin?.required||(has(u,'Confuso')&&u.attacked)?[]:[...walk(u).keys()].filter(c=>!at(c));
   if(mode==='jump')return cells.filter(c=>free(c)&&spellSight(u,c));
@@ -259,6 +261,7 @@ function legalCells(selection=mode,u=active()){
   if(mode==='dissolve'||mode==='relocate')return creations.filter(v=>v.cell!==undefined
     && (mode==='relocate'?v.side===u.side:visibleCreation(u,v))).map(v=>v.cell);
   if(isAttack(mode)){
+    if(!canAttack(u))return [];
     const reach=mode==='ray'?paths([origin?.unit===u?origin.cell:u.cell],3,(a,b)=>passable(u,a,b)?1:Infinity):null;
     const unitTargets=units.filter(v=>v.side!==u.side&&v.cell!==null
       && !(round===1&&zones[v.side].includes(v.cell))
@@ -330,11 +333,12 @@ function selectCreation(location){
   }else putCreation(id,location);
   resume();
 }
+const baseMovement=u=>u.type==='Terra'?4:5;
 function begin(){
   const u=active();
   chronicle.turn({serial,round,side:u.side,unit:name(u)},publicState());inspected=u.id;
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
-  mode='move';u.attacked=false;u.played=[];u.pm=u.type==='Terra'?4:5;
+  mode='move';u.attacked=false;u.played=[];u.pm=baseMovement(u);
   u.attackTargets=[];u.attackLimit=1;u.noAttack=false;reactionsLocked=false;
   u.penetrate=false;u.ghost=false;origin=null;
   u.projection=false;
@@ -391,6 +395,23 @@ function resume(){
   if(phase!=='end')phase=active().cell===null&&!utilityReaction?'charge':'action';
   clearCurses();show(active().side);
 }
+function offerRebirthMovement(){
+  const u=active(),bonus=baseMovement(u);
+  const finish=boost=>{
+    if(phase!=='selection'||choice?.intent!=='rebirth')return;
+    chronicle.begin({title:'Rinascita',actor:name(u)});
+    if(boost){
+      u.pm+=bonus;u.noAttack=true;
+      note(name(u)+' rinuncia agli Attacchi: +'+bonus+' PM per questo turno.');
+    }else note(name(u)+' rinasce senza bonus movimento.');
+    resume();
+  };
+  choose('Rinascita: puoi rinunciare agli Attacchi per ottenere +'+bonus+' PM in questo turno.',[
+    ['Ottieni +'+bonus+' PM · rinuncia agli Attacchi',()=>finish(true),{bonus:true}],
+    ['Mantieni gli Attacchi · movimento normale',()=>finish(false),{bonus:false}],
+  ]);
+  choice.intent='rebirth';
+}
 function chooseCell(text,positions,apply,done=resume,optional=true,side=active().side){
   if(!positions.length){done();return;}
   choose(text,optional?[['Salta',done]]:[],side,positions);
@@ -432,6 +453,7 @@ function pay(u,cost){
 }
 function cast(id){
   const u=active();
+  if(isAttack(id)&&!canAttack(u))return false;
   if(utilityReaction&&(utilityReaction.used||!cards[id][2].startsWith('Utilità')))return false;
   if(effectiveRange(u,cards[id][2])==='Vista'&&has(u,'Accecato'))return false;
   const index=teams[u.side].hand.indexOf(id);
@@ -751,6 +773,7 @@ function selectCell(c,selection=mode){
   }
   if(phase==='spawn'){
     u.cell=c;u.hp=u.type==='Terra'?8:6;u.pe=4;phase='action';ritualReady=canRitual();
+    offerRebirthMovement();return;
   }else if(isAttack(mode)||afflictions[mode]||unitSpells.includes(mode)){targetUnit(c);return;}
   else if(mode==='leap'){
     if(!cast('leap'))return;
@@ -982,7 +1005,7 @@ function computerTurn(){
       for(const [label,run,details] of choice.options){
         const card=details?.reaction??Object.keys(cards).find(id=>cards[id][0]===label);
         const kind=details?.reaction?'reaction':choice.intent??'option';
-        add(kind,run,{label,card,target:details?.unit});
+        add(kind,run,{label,card,target:details?.unit,bonus:details?.bonus});
       }
     }else if(phase==='choice'){
       for(const option of choice.options){
@@ -1028,7 +1051,7 @@ function computerTurn(){
     const attacksInHand=['arc',...t.hand.filter(isAttack)].filter(id=>canPlay(moved,id));
     let best=0;
     for(const id of attacksInHand){
-      for(const targetCell of legalCells(id,moved)){
+      for(const targetCell of actionCells(id,moved)){
         const target=at(targetCell);
         if(target?.side!==enemy||has(target,'Pietrificato'))continue;
         const damage=attacks[id]?.damage??(id==='arc'?1:2);
@@ -1038,11 +1061,17 @@ function computerTurn(){
     return best;
   }
   const currentAttack=level==='hard'&&phase==='action'&&mode!=='jump'?followUp(u.cell,0):0;
+  const rebirthPlans=choice?.intent==='rebirth'?[false,true].flatMap(bonus=>{
+    const actor={...u,pm:u.pm+(bonus?baseMovement(u):0)};
+    return [...walk(actor)].filter(([c])=>c===u.cell||!at(c)).map(([cell,{cost}])=>({
+      bonus,cell,cost,attack:bonus?0:followUp(cell,cost),
+    }));
+  }):[];
   const state={level,side,phase,mode,unit,hand:t.hand,own:{
     kills:t.kills,ritual:t.ritual,reserve:t.reserve,
   },opponent:{
     kills:teams[enemy].kills,ritual:teams[enemy].ritual,reserve:teams[enemy].reserve,reaction:teams[enemy].reaction,
-  },foes,creations,position,followUp,currentAttack,cards,attacks,afflictions};
+  },foes,creations,position,followUp,currentAttack,rebirthPlans,cards,attacks,afflictions};
   const scored=[];
   const action=chooseComputerAction(actions,state,Math.random,(candidate,value)=>scored.push({candidate,value}));
   if(action){
