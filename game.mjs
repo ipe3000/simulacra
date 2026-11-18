@@ -3,6 +3,7 @@ import catalog from './catalogo-carte.json' with {type:'json'};
 import {chooseComputerAction} from './computer.mjs?v=2';
 import {createFeedback} from './feedback.mjs?v=2';
 import {createChronicle} from './chronicle.mjs?v=1';
+import {setupDetails} from './details.mjs?v=1';
 
 const cards={
   arc:['Colpo Arcano',0,'Attacco · Tocco','Infligge 1 danno.'],
@@ -98,7 +99,8 @@ const labels=['Rosso','Blu'];
 const root=document.querySelector('#game');
 const feedback=createFeedback(root);
 const chronicle=createChronicle();
-let inspected=0,historyLimit=8,historySignature='';
+let detailReader={close(){}};
+let inspected=0,historyLimit=8,historySignature='',showFullHistory=false;
 const publicState=()=>({
   units:units.map(u=>({id:u.id,name:name(u),hp:u.hp,pe:u.pe,pm:u.pm,cell:u.cell,position:cellLabel(u.cell),conditions:{...u.conditions}})),
   teams:teams.map((t,i)=>({name:labels[i],reserve:t.reserve,kills:t.kills,ritual:t.ritual})),
@@ -143,6 +145,8 @@ function start(){
   clearTimeout(botTimer);
   cancelMovementAnimation();
   feedback.reset();visualEvents=[];
+  detailReader.close();showFullHistory=false;
+  document.querySelector('.match-menu')?.removeAttribute?.('open');
   chronicle.reset();historyLimit=8;historySignature='';
   document.querySelector('#route-caption').textContent='';
   document.querySelector('#action-caption').textContent='';
@@ -1138,52 +1142,51 @@ function inspector(){
     (cube?'<p><strong>Nel Cubo nemico</strong> · perde 1 PF aggiuntivo quando subisce danni; uscire costa 2 PM.</p>':'')+
     (u===active()&&u.noAttack?'<p>Un effetto impedisce di attaccare per il resto del turno.</p>':'')+'</section>';
 }
+function unitDetails(u){
+  return [name(u),u.hp+' / '+maxHp(u)+' PF · '+u.pe+' PE'+(u===active()?' · '+u.pm+' PM':''),
+    ...Object.keys(u.conditions).map(c=>c+'\n'+conditionInfo(u,c)),
+    u.cell===null?(phase==='setup'?'Non ancora schierato.':'Caduto: rinasce nel proprio turno.'):'',
+    creations.some(v=>v.id==='cube'&&v.side!==u.side&&v.cell===u.cell)?'Cubo nemico: Vulnerabile e costo di uscita 2 PM.':'',
+    u===active()&&u.noAttack?'Non può attaccare per il resto del turno.':''].filter(Boolean).join('\n\n');
+}
+function entryDetails(e){
+  return [e.title+' · '+e.status,e.actor+(e.target?' → '+e.target:''),
+    ...e.cards.map(c=>c.actor+' · '+cards[c.id][0]+'\n'+cards[c.id][2]+' · '+cards[c.id][1]+' PE\n'+cards[c.id][3]),
+    e.changes.length?'Conseguenze effettive\n'+e.changes.join('\n'):'Nessuna variazione registrata.'].join('\n\n');
+}
 function renderChronicle(){
-  const host=document.querySelector('#match-history');
-  host.hidden=false;
+  const host=document.querySelector('#match-history');host.hidden=false;
   const perspective=matchMode==='solo'?controllers.findIndex(v=>!v):viewer;
-  const signature=JSON.stringify([chronicle.turns,perspective,historyLimit]);
-  if(signature===historySignature)return;
-  historySignature=signature;
-  const opened=new Set([...host.querySelectorAll('details[open]')].map(d=>d.dataset.history));
-  const known=new Set([...host.querySelectorAll('details[data-history]')].map(d=>d.dataset.history));
-  const scroll=host.querySelector('.full-history')?.scrollTop??0;
+  const signature=JSON.stringify([chronicle.turns,perspective,historyLimit,showFullHistory]);
+  if(signature===historySignature)return;historySignature=signature;
+  const scroll=host.querySelector('.history-list')?.scrollTop??0;
   const enemy=[...chronicle.turns].reverse().find(t=>t.side!==perspective);
-  const cardText=c=>'<div class="history-card"><strong>'+attr(cards[c.id][0])+'</strong> · '+c.actor+
-    '<small>'+cards[c.id][2]+' · '+cards[c.id][1]+' PE</small><p>'+attr(cards[c.id][3])+'</p></div>';
-  const actionText=e=>'<li><strong>'+e.title+'</strong> <span class="outcome">'+e.status+'</span><p>'+e.actor+(e.target?' → '+e.target:'')+'</p>'+
-    (e.cards.length?'<details data-history="a'+e.id+'" '+(opened.has('a'+e.id)?'open':'')+'><summary>Testi delle carte'+(e.cards.length>1?' · incluse le Reazioni':'')+'</summary>'+e.cards.map(cardText).join('')+'</details>':'')+
-    (e.changes.length?'<details data-history="e'+e.id+'" '+(opened.has('e'+e.id)?'open':'')+'><summary>Conseguenze · '+e.changes.length+'</summary><ul>'+e.changes.map(c=>'<li>'+c+'</li>').join('')+'</ul></details>':'')+'</li>';
-  const turnText=(t,featured=false)=>{
-    const key=(featured?'f':'t')+t.id;
-    return '<details class="history-turn" data-history="'+key+'" '+(opened.has(key)||featured&&!known.has(key)?'open':'')+'><summary>Round '+t.round+' · '+t.unit+' · '+(t.complete?'concluso':'in corso')+'</summary>'+
-    (featured?'<p class="turn-recap">'+([...new Set(t.entries.flatMap(e=>e.changes).filter(c=>/ PF|caduto|rimossa|Creata:|Rimossa:|punti |: (Accecato|Vulnerabile|Pietrificato|Rallentato|Invisibile|Confuso|Maledetto)/.test(c)))].slice(-8).join(' · ')||'Le azioni e i relativi esiti sono elencati qui sotto.')+'</p>':'')+
-    (t.entries.length?'<ol>'+t.entries.map(actionText).join('')+'</ol>':'<p>Nessuna azione ancora eseguita.</p>')+'</details>';
-  };
-  host.innerHTML='<h2>Che cosa è successo</h2><p class="muted">Azioni in ordine di risoluzione. Apri una voce per leggere carte e conseguenze.</p>'+
-    '<section class="last-enemy"><h3>Ultimo turno avversario'+(matchMode==='spectator'?' · rispetto a '+labels[perspective]:'')+'</h3>'+
-    (enemy?turnText(enemy,true):'<p>Il tuo avversario non ha ancora svolto un turno.</p>')+'</section>'+
-    '<details class="full-history" data-history="all" '+(opened.has('all')?'open':'')+'><summary>Cronologia completa · '+chronicle.turns.length+' turni</summary>'+
-    [...chronicle.turns].reverse().slice(0,historyLimit).map(t=>turnText(t)).join('')+
-    (chronicle.turns.length>historyLimit?'<button type="button" id="older-history">Mostra turni precedenti</button>':'')+'</details>';
-  const full=host.querySelector('.full-history');if(full)full.scrollTop=scroll;
+  const actionText=e=>'<li><button type="button" class="history-entry" data-detail="'+attr(entryDetails(e))+'"><strong>'+e.title+
+    (e.cards.length>1?' + '+e.cards.slice(1).map(c=>cards[c.id][0]).join(', '):'')+'</strong><span>'+e.actor+(e.target?' → '+e.target:'')+
+    '</span><small>'+e.status+' · dettagli ↗</small></button></li>';
+  const turnText=t=>'<section class="history-turn"><h3>R'+t.round+' · '+t.unit+' · '+(t.complete?'concluso':'in corso')+'</h3>'+
+    (t.entries.length?'<ol>'+t.entries.map(actionText).join('')+'</ol>':'<p class="muted">Nessuna azione ancora eseguita.</p>')+'</section>';
+  host.innerHTML='<div class="history-heading"><h2>'+(showFullHistory?'Cronologia':'Ultimo turno avversario')+'</h2>'+
+    '<button type="button" id="history-mode">'+(showFullHistory?'Ultimo turno':'Tutti i turni')+'</button></div>'+
+    '<div class="history-list" tabindex="0" aria-label="Azioni del turno">'+
+    (showFullHistory?[...chronicle.turns].reverse().slice(0,historyLimit).map(turnText).join(''):
+      enemy?turnText(enemy):'<p class="muted">L’avversario non ha ancora svolto un turno.</p>')+
+    (showFullHistory&&chronicle.turns.length>historyLimit?'<button type="button" id="older-history">Mostra precedenti</button>':'')+'</div>'+
+    '<p class="history-hint">Sosta, focus o clic su una voce per i dettagli.</p>';
+  const list=host.querySelector('.history-list');if(list)list.scrollTop=scroll;
 }
 function renderAnnouncement(){
   const host=document.querySelector('#action-caption'),entry=chronicle.current;
-  if(!entry){host.innerHTML='<strong>'+ (phase==='setup'?'Schieramento dei Simulacri':'Il turno è iniziato')+'</strong><span>Le carte giocate, i bersagli e gli esiti compariranno qui.</span><span>Consulta lo stato dei Simulacri nel pannello e il turno avversario nella cronologia.</span>';return;}
-  const expanded=host.querySelector('details')?.open;
-  const waiting=presenting||pending;
-  const state=waiting?'Lancio · in attesa di risoluzione':entry.status;
-  const latest=entry.cards.at(-1);
-  host.innerHTML='<strong>'+entry.title+'</strong><span>'+state+' · '+entry.actor+(entry.target?' → '+entry.target:'')+'</span>'+
-    (entry.cards.length>1?'<span>Reazioni: '+entry.cards.slice(1).map(c=>cards[c.id][0]).join(', ')+'</span>':'')+
-    (latest?'<details '+(expanded?'open':'')+'><summary>Leggi '+cards[latest.id][0]+'</summary><p>'+attr(cards[latest.id][3])+'</p></details>':'')+
-    (!waiting&&entry.changes.length?'<span class="announcement-result">'+entry.changes.slice(-2).join(' · ')+'</span>':'');
+  if(!entry){host.innerHTML='<strong>'+(phase==='setup'?'Schieramento':'Inizio turno')+'</strong><span>Nome, autore, bersaglio ed esito dell’ultima azione compariranno qui.</span>';return;}
+  const state=presenting||pending?'Lancio in attesa di risoluzione':entry.status;
+  host.innerHTML='<button type="button" class="announcement-title" data-detail="'+attr(entryDetails(entry))+'">'+entry.title+'</button>'+
+    '<span>'+entry.actor+(entry.target?' → '+entry.target:'')+' · <strong>'+state+'</strong>'+
+    (entry.cards.length>1?' · '+entry.cards.slice(1).map(c=>cards[c.id][0]).join(', '):'')+'</span>';
 }
 function button(label,fn,enabled=true,cls='',tip=''){
   const i=actions.push(fn)-1;
   const unavailable=(cls.startsWith('cell ')||cls.startsWith('card '))?(cls.startsWith('card ')?'aria-disabled="true"':'aria-disabled="true" tabindex="-1"'):'disabled';
-  return '<button type="button" data-action="'+i+'" class="'+cls+'" title="'+attr(tip)+'" '+(enabled?'':unavailable)+'>'+label+'</button>';
+  return '<button type="button" data-action="'+i+'" class="'+cls+'" '+(cls.startsWith('card ')?'data-detail="'+attr(tip)+'"':'title="'+attr(tip)+'"')+' '+(enabled?'':unavailable)+'>'+label+'</button>';
 }
 function line(e,cls,fn,tip){
   const [x,y,a,b]=e;
@@ -1291,12 +1294,15 @@ function render(){
     :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
     :choice?.text??prompt??'Completa la scelta o termina il Turno.';
-  root.innerHTML='<div class="layout"><section class="play-area"><div class="board">'+board+'</div>'+
-    (hand?'<section class="hand"><h3>'+(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide])+'</h3><div class="cards">'+hand+'</div></section>':'')+
-    '<p class="key">▲ Terra · ϟ Fulmine · ◉ Zona Rituale · ✦ Zona Evocazione</p></section><aside class="panel"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div>'+inspector()+
-    (hand?'<div id="card-detail" class="card-detail" role="status"></div>':'')+
-    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" aria-label="Esamina '+name(k)+'" aria-pressed="'+(inspected===k.id)+'" class="unit-summary"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
-    '</aside></div>';
+  const historyHost=document.querySelector('#match-history'),announcementHost=document.querySelector('#action-caption'),routeHost=document.querySelector('#route-caption');
+  root.innerHTML='<div class="layout"><section class="play-area"><div id="announcement-slot"></div><div class="board-stage"><div class="board">'+board+'</div></div>'+
+    '<section class="decision-dock"><div class="decision-row"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div><span id="route-slot"></span></div>'+
+    '<section class="hand"><h3>'+(hand?(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide]):'Attendi la decisione indicata in alto')+'</h3><div class="cards">'+hand+'</div></section></section></section><aside class="panel"><section class="roster">'+
+    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" data-detail="'+attr(unitDetails(k))+'" aria-label="Esamina '+name(k)+'" class="unit-summary '+(k===u?'current-unit':'')+'"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE'+(k===u?' · '+k.pm+' PM':'')+'<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
+    '</section><div id="history-slot"></div></aside></div>';
+  document.querySelector('#announcement-slot').append?.(announcementHost);
+  document.querySelector('#history-slot').append?.(historyHost);
+  document.querySelector('#route-slot').append?.(routeHost);
   previewCard();
   feedback.update({units,teams,creations,phase,winner,moving:animatingMovement,active:u.id,labels,viewerLabel:labels[viewer],choiceText:choice?.text,
     pending:pending?{from:spellOrigin(u),to:pending.defender.cell,label:cards[pending.id][0]+' → '+name(pending.defender)}:null,
@@ -1307,7 +1313,7 @@ function render(){
 }
 function previewCard(card=root.querySelector('.card.selected')){
   const detail=root.querySelector('#card-detail');
-  if(detail)detail.textContent=card?.title||'Carte: seleziona o passa sopra per leggere effetto e vincoli, anche se indisponibili.';
+  if(detail)detail.textContent=card?.dataset.detail||card?.title||'';
 }
 root.addEventListener('pointerover',event=>{
   const card=event.target.closest('.card');
@@ -1339,7 +1345,7 @@ root.addEventListener('focusout',event=>{
 });
 root.addEventListener('click',event=>{
   const unit=event.target.closest('[data-inspect]');
-  if(unit){inspected=Number(unit.dataset.inspect);render();root.querySelector('[data-inspect="'+inspected+'"]')?.focus();return;}
+  if(unit){inspected=Number(unit.dataset.inspect);return;}
   const b=event.target.closest('button[data-action]');
   if(b?.matches('.card[aria-disabled="true"]')){previewCard(b);return;}
   if(b?.matches('.discard-card .card')){previewCard(b);return;}
@@ -1371,6 +1377,7 @@ const setupForm=document.querySelector('#computer-setup');
 const titleMenu=startLocal.parentElement;
 let selectedMatch='local';
 function openMatch(type,players){
+  document.body?.classList.add('match-active');
   matchMode=type;
   controllers=players;
   titleScreen.hidden=true;
@@ -1420,11 +1427,13 @@ document.querySelector('#main-menu').onclick=()=>{
   if(phase!=='end'&&!confirm('Tornare al menu principale? La partita in corso terminerà.'))return;
   clearTimeout(botTimer);
   cancelMovementAnimation();
+  document.body?.classList.remove('match-active');detailReader.close();
   feedback.reset();document.querySelector('#action-caption').textContent='';
   document.querySelector('#match-history').hidden=true;document.querySelector('#route-caption').textContent='';
   matchHeader.hidden=true;
   logExport.hidden=true;
   root.hidden=true;
+  document.body?.append(document.querySelector('#match-history'),document.querySelector('#action-caption'),document.querySelector('#route-caption'));
   root.replaceChildren();
   titleScreen.hidden=false;
   (matchMode==='solo'?startSolo:matchMode==='spectator'?startSpectator:startLocal).focus();
@@ -1433,5 +1442,7 @@ document.querySelector('#main-menu').onclick=()=>{
 const reducedMotion=document.querySelector('#reduce-motion');
 reducedMotion.checked=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 document.querySelector('#match-history').addEventListener('click',event=>{
+  if(event.target.id==='history-mode'){showFullHistory=!showFullHistory;renderChronicle();}
   if(event.target.id==='older-history'){historyLimit+=12;renderChronicle();}
 });
+if(typeof document.addEventListener==='function')detailReader=setupDetails();

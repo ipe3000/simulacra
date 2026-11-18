@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=14">
+<link rel="stylesheet" href="./style.css?v=20">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -61,19 +61,24 @@
       <select id="computer-speed"><option value="1000">Lenta</option><option value="550" selected>Normale</option><option value="120">Rapida</option></select>
     </label>
   </div>
+  <details class="match-menu"><summary>Partita</summary><div class="match-menu-content">
   <button id="reset" type="button">Nuova partita</button>
   <button id="copy-match-log" type="button" hidden title="Il registro include le carte considerate nelle decisioni dei computer">Copia registro partita</button>
   <button id="main-menu" type="button">Menu principale</button>
-  <a class="history-link" href="#match-history">Ultimo turno e cronologia</a>
   <details class="animation-settings"><summary>Animazioni</summary>
     <label>Ritmo <select id="animation-speed"><option value="1.5">Lento</option><option value="1" selected>Normale</option><option value="0.6">Rapido</option></select></label>
     <label><input id="reduce-motion" type="checkbox"> Riduci movimento</label>
   </details>
+  </div></details>
 </header>
 <section id="action-caption" class="action-caption" aria-label="Ultima azione"></section>
 <p id="route-caption" class="route-caption" role="status"></p>
 <textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
 <main id="game" hidden></main>
 <section id="match-history" class="match-history" aria-label="Cronologia della partita" hidden></section>
-<script type="module" src="./game.mjs?v=12"></script>
+<aside id="context-detail" class="context-detail" role="dialog" aria-label="Dettagli" hidden>
+  <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
+  <p id="detail-content"></p>
+</aside>
+<script type="module" src="./game.mjs?v=13"></script>
 </html>

@@ -92,6 +92,7 @@ h1{font-size:25px}
 .card small{font-size:11px}.card-detail{white-space:pre-line;min-height:94px;font-size:13px;background:#191a19;border:1px solid var(--border);border-radius:6px;padding:7px}
 .card-detail:empty{display:none}details .log{max-height:95px;overflow:auto}
 @media(max-width:900px),(max-height:520px){.play-area{max-width:none}}
+
 .card[aria-disabled=true]{opacity:.6;cursor:default}
 .card.group-start{margin-inline-start:5px}.card small+small{margin-top:2px}
 .creation{display:inline-grid;place-items:center;border:1px solid #dfc080;border-radius:4px;width:62%;height:62%;background:#272c21;color:#ffe9ad;font-size:1.3rem}
@@ -316,3 +317,75 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .match-history{scroll-margin-top:12px}
 .announcement-result{display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 @media(max-width:900px),(max-height:520px){.play-area{max-width:none}}
+
+/* Compact command station: details share a non-modal reading surface. */
+.match-menu{position:relative;flex:none;font-size:13px}
+.match-menu>summary{cursor:pointer;padding:8px 12px;border:1px solid var(--border)}
+.match-menu-content{position:absolute;right:0;top:100%;z-index:40;display:grid;gap:8px;width:240px;padding:12px;background:#26382b;border:1px solid var(--gold);box-shadow:0 8px 30px #0008}
+.announcement-title{display:block;background:none;border:0;box-shadow:none;color:#ffe0a3;padding:0;text-align:left;font:600 19px/1.25 Georgia,serif;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.action-caption{min-height:56px}
+body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{display:none}
+.decision-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.decision-row .instruction{font-size:12px;flex:1 1 180px}
+.decision-dock .hand{margin-top:6px}
+.roster{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.unit-summary{text-align:left}
+.unit-summary.current-unit{border-color:#ffe0a3;box-shadow:inset 3px 0 #ffe0a3}
+#history-slot{min-height:0}
+.match-history{margin:0;width:100%;max-width:none;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:6px;min-height:0;padding:10px}
+.history-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.history-heading h2{font:600 15px/1.3 Georgia,serif;margin:0}
+.history-heading button{font-size:11px;padding:4px 6px;flex:none}
+.history-list{overflow:auto;overscroll-behavior:contain;min-height:0;scrollbar-gutter:stable;max-height:420px}
+.history-list .history-turn{padding:0;background:none;border:0;margin:0 0 10px}
+.history-list .history-turn h3{font-size:11px;margin:2px 0 6px;color:#c7ceb7}
+.history-list ol{padding:0;margin:0;list-style:none}
+.history-entry{width:100%;display:block;text-align:left;padding:7px 6px;border:0;border-bottom:1px solid #677152;background:#24372b;box-shadow:none;line-height:1.35}
+.history-entry strong{display:block;font-size:12px;color:#f3ddb0}
+.history-entry span{display:block;font-size:11px;margin-top:3px;color:#d7ddc9}
+.history-entry small{font-size:10px;color:#b4bda8}
+.history-entry:hover,.history-entry:focus-visible{background:#3b4e37}
+.history-hint{font-size:10px;color:#bac5ad}
+.context-detail{position:fixed;z-index:100;width:320px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:12px;background:#24362b;color:#f1e8d3;border:1px solid #ccb27c;box-shadow:0 12px 40px #000b;line-height:1.5}
+.context-detail.pinned{border-width:2px}
+#close-detail{display:block;margin-left:auto;padding:4px 8px;font-size:12px}
+#detail-content{white-space:pre-line;font-size:13px;margin:8px 0 0}
+#match-log-export{position:fixed;inset:10% 10% auto;z-index:110;max-width:80vw}
+@media(min-width:1100px) and (min-height:650px){
+  body.match-active{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+  .match-active #match-header{flex:0 0 auto;max-width:none;width:100%;padding:6px 16px;min-height:46px;flex-wrap:nowrap;gap:10px}
+  #match-header h1{font-size:21px}
+  #turn{font-size:13px;padding-left:8px}
+  #spectator-controls{font-size:11px;flex-wrap:nowrap;gap:5px}
+  #spectator-controls button{font-size:11px;padding:6px}
+  #spectator-controls select{padding:4px}
+  .match-active #game{flex:1 1 0;min-height:0;width:100%;max-width:none;padding:8px 16px 12px}
+  #game .layout{height:100%;min-height:0;grid-template-columns:minmax(0,1fr) 320px;gap:12px}
+  #game .play-area{height:100%;min-height:0;max-width:none;display:grid;grid-template-rows:54px minmax(0,1fr) 132px;gap:8px}
+  #announcement-slot{min-height:0}
+  #action-caption{height:54px;min-height:0;margin:0;max-width:none;padding:5px 10px!important;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden}
+  #action-caption>strong{font-size:18px}
+  #action-caption>span{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .board-stage{min-width:0;min-height:0;container-type:size;display:flex;align-items:center;justify-content:center}
+  .board-stage .board{width:min(100cqw,216.6667cqh);aspect-ratio:13/6;grid-template-rows:repeat(6,minmax(0,1fr));flex:none}
+  .decision-dock{min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:5px;overflow:hidden}
+  .decision-row{max-height:58px;overflow:auto;min-height:30px;gap:6px}
+  .decision-row .instruction{margin:0;font-size:12px}
+  .decision-row .actions{gap:5px;flex:none}
+  .decision-row button{font-size:12px;padding:6px 8px}
+  #route-caption{font-size:11px;min-height:0;padding:0;margin:0;white-space:nowrap}
+  .decision-dock .hand{margin:0;padding:5px 6px;min-height:0;overflow:hidden}
+  .hand h3{font-size:11px}
+  .hand .cards{height:calc(100% - 17px);margin-top:4px;min-height:0;gap:5px;overflow:auto}
+  .hand .card{flex:1 0 126px;min-width:126px;min-height:0;font-size:12px;padding:5px}
+  .hand .card small{font-size:10px}
+  .discard-card{min-height:0;min-width:126px;flex-basis:126px}
+  #game .panel{height:100%;min-height:0;align-self:stretch;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;padding:0;border:0;box-shadow:none;background:none}
+  .roster .team{padding:8px;margin:0;border:1px solid #697454;background:#2e4031;font-size:12px;min-width:0}
+  .roster .stats{font-size:10px;line-height:1.4}
+  .roster .unit-summary{padding:5px;margin-top:5px;font-size:11px;line-height:1.4}
+  .roster .unit-summary small{font-size:10px;line-height:1.35}
+  #history-slot{height:100%;display:flex}
+  #match-history{height:100%}
+  .history-list{max-height:none}
+}
