@@ -113,18 +113,12 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .board{background:#c4a887 url('./dungeon.png?v=5') center/101.895206% 103.864734% no-repeat;image-rendering:auto;outline:2px solid #ac9061;border:0}
 .cell{box-shadow:none;border:1px solid #6b50341a}
 
-/* Masonry occupies ~14%/10% on left/right and ~20%/10% on top/bottom.
-   Offset only the symbols to the center of the remaining visible floor. */
+/* Shared cell centers keep summoning rows and the ritual column aligned. */
 .cell.redzone::before,.cell.bluezone::before,.cell.ritual::before{
   content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
-  background:var(--zone-sigil) center/80% 80% no-repeat;
-  translate:calc((var(--zone-floor-left,0%) - var(--zone-floor-right,0%))/2) calc((var(--zone-floor-top,0%) - var(--zone-floor-bottom,0%))/2);
+  background:var(--zone-sigil) center/70.4% 70.4% no-repeat;
 }
-.cell.ritual::before{background-size:71% 71%}
-.cell.zone-wall-left{--zone-floor-left:14%}
-.cell.zone-wall-right{--zone-floor-right:10%}
-.cell.zone-wall-top{--zone-floor-top:20%}
-.cell.zone-wall-bottom{--zone-floor-bottom:10%}
+.cell.ritual::before{background-size:62.48% 62.48%}
 .cell.redzone,.cell.bluezone,.cell.ritual{isolation:auto}
 .cell.redzone{--zone-sigil:url('./sprites/zone-summoning.svg?v=3')}
 .cell.bluezone{--zone-sigil:url('./sprites/zone-summoning-blue.svg?v=3')}
