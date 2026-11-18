@@ -139,10 +139,10 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 /* Creazioni e Simulacri in pixel art */
 .token,.token.blue{display:inline-block;position:relative;z-index:4;width:94%;height:94%;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated;vertical-align:middle;filter:drop-shadow(0 1px 1px #25191b)}
 .token::before{content:none}
-.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=5')}
-.token.lightning{--sprite:url('./sprites/mage-0-lightning.png?v=5')}
-.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=5')}
-.token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png?v=5')}
+.token.earth{--sprite:url('./sprites/mage-0-earth.png?v=6')}
+.token.lightning{--sprite:url('./sprites/mage-0-lightning.png?v=6')}
+.token.blue.earth{--sprite:url('./sprites/mage-1-earth.png?v=6')}
+.token.blue.lightning{--sprite:url('./sprites/mage-1-lightning.png?v=6')}
 .token.active{outline-offset:-2px}
 .token.on-creation{width:66%;height:66%;translate:12% -12%}
 .creation{position:absolute;z-index:1;inset:3%;width:auto;height:auto;border:0;border-radius:0;background:var(--sprite) center/contain no-repeat;image-rendering:pixelated}
