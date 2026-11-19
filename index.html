@@ -24,6 +24,7 @@
     <li><img src="./sprites/mage-1-lightning.png?v=7" alt="Simulacro di Fulmine blu"></li>
   </ul>
   <nav class="title-menu" aria-label="Modalità di gioco">
+    <button id="start-online" type="button"><span>Online con un amico</span><span class="title-menu-aside" aria-hidden="true">→</span><small>Invita tramite link · gratuito</small></button>
     <button id="start-local" type="button">
       <span>Giocatore vs Giocatore</span><span class="title-menu-aside" aria-hidden="true">→</span>
       <small>Due giocatori sullo stesso dispositivo</small>
@@ -37,6 +38,17 @@
       <small>Osserva due avversari automatici</small>
     </button>
   </nav>
+  <section id="online-panel" class="computer-setup" hidden aria-label="Partite online">
+    <h2>Online con un amico</h2>
+    <p>Gratuito, senza account. Chi invita tiene aperto il gioco. Alcune reti possono impedire il collegamento diretto.</p>
+    <button id="create-online" type="button">Crea invito</button>
+    <label>Link ricevuto <input id="join-link" type="url" placeholder="Incolla il link d’invito"></label>
+    <button id="join-online" type="button">Entra nella partita</button>
+    <p id="online-status" role="status"></p>
+    <h3>Le tue partite salvate</h3><div id="online-saves"></div>
+    <label>Importa backup personale <input id="import-online" type="file" accept=".json,application/json"></label>
+    <button id="close-online" type="button">Chiudi</button>
+  </section>
   <form id="computer-setup" class="computer-setup" hidden>
     <h2 id="computer-mode"></h2>
     <label id="side-setting">Il tuo Arcimago
@@ -71,6 +83,14 @@
   </details>
   </div></details>
 </header>
+<section id="online-bar" class="online-bar" hidden aria-label="Collegamento online">
+  <p id="online-connection" role="status"></p>
+  <div id="online-invite"><label>Link d’invito <input id="online-link" readonly></label> <button id="copy-invite" type="button">Copia invito</button></div>
+  <button id="reconnect-online" type="button">Ricollega</button>
+  <button id="export-online" type="button">Esporta backup personale</button>
+  <button id="leave-online" type="button">Torna al menu</button>
+  <p class="online-note">Conserva il backup per recuperare il tuo posto. Contiene credenziali personali: non condividerlo come invito.</p>
+</section>
 <section id="action-caption" class="action-caption" aria-label="Ultima azione"></section>
 <p id="route-caption" class="route-caption" role="status"></p>
 <textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
@@ -80,5 +100,5 @@
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=15"></script>
+<script type="module" src="./game.mjs?v=16"></script>
 </html>

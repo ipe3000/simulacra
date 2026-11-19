@@ -388,3 +388,11 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
   #match-history{height:100%}
   .history-list{max-height:none}
 }
+/* Free private online rooms. */
+.online-bar{margin:8px auto;padding:10px 16px;max-width:1200px;background:#24392b;border:1px solid #89996c;border-radius:8px;color:#eee}
+.online-bar[hidden],#online-panel[hidden]{display:none}
+.online-bar p{margin:4px 0}.online-note{font-size:12px;opacity:.85}
+.online-bar input,#online-panel input[type=url]{width:min(460px,90%);padding:7px;background:#17291e;color:#fff;border:1px solid #82916b;border-radius:4px}
+#online-panel{max-width:600px;text-align:left}#online-panel label{display:block;margin:12px 0}
+#online-saves{display:flex;flex-wrap:wrap;gap:8px}#online-panel p{line-height:1.5}
+#game[inert]{opacity:.8}#online-bar:not([hidden])~#game #history-mode,#online-bar:not([hidden])~#game #older-history{display:none}
