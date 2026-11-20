@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=31">
+<link rel="stylesheet" href="./style.css?v=32">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -69,7 +69,10 @@
 </main>
 <header id="match-header" hidden>
   <h1>Simulacra</h1>
-  <div id="turn" role="status" tabindex="-1"></div>
+  <div class="match-turn">
+    <span id="online-side" class="online-side" hidden></span>
+    <div id="turn" role="status" tabindex="-1"></div>
+  </div>
   <div id="spectator-controls" hidden>
     <button id="toggle-computers" type="button">Avvia</button>
     <button id="step-computers" type="button">Avanza di una decisione</button>
@@ -108,5 +111,5 @@
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=18"></script>
+<script type="module" src="./game.mjs?v=19"></script>
 </html>

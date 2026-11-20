@@ -388,6 +388,10 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
   .history-list{max-height:none}
 }
 /* Free private online rooms. */
+.match-turn{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
+.match-turn #turn{margin-right:0}
+.online-side{flex:none;white-space:nowrap;padding:4px 8px;border:1px solid #a57361;border-radius:3px;background:#3b2925;color:#f5a086;font-size:13px;font-weight:650;line-height:1.5}
+.online-side[data-side=blue]{border-color:#7188ad;background:#263343;color:#adc5ec}
 .online-bar>summary{font-size:12px;color:#cbd5bb;min-height:36px;display:flex;align-items:center;white-space:nowrap}
 .online-bar[data-state=reconnecting]>summary,.online-bar[data-state=error]>summary{color:#ffe0a3;border-color:#ccb27c}
 .online-details{width:320px;max-width:calc(100vw - 28px);max-height:calc(100dvh - 90px);overflow:auto;gap:12px;font-size:14px;line-height:1.5}
@@ -400,7 +404,8 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
 @media(max-width:600px){
   body:has(#online-bar:not([hidden])) #match-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px}
   body:has(#online-bar:not([hidden])) #match-header h1{font-size:20px}
-  body:has(#online-bar:not([hidden])) #turn{grid-column:1/-1;grid-row:2;margin:0;font-size:13px}
+  body:has(#online-bar:not([hidden])) .match-turn{grid-column:1/-1;grid-row:2;width:100%;gap:8px}
+  body:has(#online-bar:not([hidden])) #turn{margin:0;padding-left:8px;font-size:13px}
   #online-bar{grid-column:2;grid-row:1}
   body:has(#online-bar:not([hidden])) #match-header>.match-menu:not(.online-bar){grid-column:3;grid-row:1}
 }

@@ -46,7 +46,7 @@ export function setupOnline(game){
     retryTimer=null;connectTimer=null;
     connection?.close();peer?.destroy();connection=peer=null;
   }
-  function leave(){active=false;disconnect();session.clear();bar.hidden=true;bar.open=false;$('online-notice').hidden=true;}
+  function leave(){active=false;disconnect();session.clear();bar.hidden=true;bar.open=false;$('online-notice').hidden=true;$('online-side').hidden=true;}
   function connected(){
     const first=!everConnected;everConnected=true;ready=true;retries=0;
     clearTimeout(retryTimer);retryTimer=null;clearTimeout(connectTimer);
@@ -144,6 +144,9 @@ export function setupOnline(game){
   async function enter(r){
     await queue;
     record=validateRecord(r);active=true;session.set(record.key);everConnected=!!record.guest||record.revision!==undefined;
+    const side=$('online-side');
+    side.textContent=record.role==='host'?'Tu: Rosso':'Tu: Blu';
+    side.dataset.side=record.role==='host'?'red':'blue';side.hidden=false;
     panel.hidden=true;$('computer-setup').hidden=true;
     if(record.role==='host'){restore();$('online-link').value=invitation();}
     else{$('online-link').value='';if(record.view)displayGuest(record.view);else game.waiting();}
