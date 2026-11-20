@@ -108,17 +108,24 @@ export function setupOnline(game){
   }
   async function list(){
     $('online-saves').replaceChildren();
-    for(const r of (await store.all()).sort((a,b)=>b.updated-a.updated)){
+    const records=(await store.all()).sort((a,b)=>b.updated-a.updated);
+    $('online-saved-section').hidden=!records.length;
+    for(const r of records){
       const b=document.createElement('button');b.type='button';b.textContent='Riprendi '+(r.role==='host'?'Rosso':'Blu')+' · '+new Date(r.updated).toLocaleString('it-IT');b.onclick=guarded(()=>enter(r));$('online-saves').append(b);
     }
   }
-  $('start-online').onclick=guarded(async()=>{panel.hidden=false;$('computer-setup').hidden=true;if(!store)store=await openStore();await list();});
-  $('close-online').onclick=()=>{panel.hidden=true;};
+  function showPanel(){
+    panel.hidden=false;$('computer-setup').hidden=true;document.querySelector('.title-menu').hidden=true;
+    $('online-title').focus();
+  }
+  $('start-online').onclick=guarded(async()=>{showPanel();if(!store)store=await openStore();await list();});
+  $('close-online').onclick=()=>{panel.hidden=true;document.querySelector('.title-menu').hidden=false;$('start-online').focus();};
   $('leave-online').onclick=()=>{leave();location.href=location.pathname;};
   $('create-online').onclick=guarded(async()=>{
     if(!store)store=await openStore();const room=randomId();const r={protocol:ONLINE_VERSION,key:'host:'+room,role:'host',room,invite:randomId(),seed:crypto.getRandomValues(new Uint32Array(1))[0],commands:[]};await store.save(r);await enter(r);
   });
-  $('join-online').onclick=guarded(async()=>{
+  $('join-online-form').onsubmit=event=>{event.preventDefault();join();};
+  const join=guarded(async()=>{
     const input=$('join-link').value.trim();let hash;
     try{hash=new URL(input,location.href).hash;}catch{throw Error('Incolla un link d’invito valido.');}
     const m=/^#online=([a-f0-9]{32})\.([a-f0-9]{32})$/.exec(hash);if(!m)throw Error('Link d’invito non valido.');
@@ -141,7 +148,10 @@ export function setupOnline(game){
     if(r.role==='host'){game.start(r.seed);for(const c of r.commands)game.apply(c.side,c.index);game.lock();}
     r.version=old?.version??0;await store.save(r);await enter(r);
   });
-  if(location.hash.startsWith('#online=')){$('join-link').value=location.href;panel.hidden=false;}
+  if(location.hash.startsWith('#online=')){
+    $('join-link').value=location.href;showPanel();$('join-online').focus();
+    guarded(async()=>{if(!store)store=await openStore();await list();})();
+  }
   return {leave,act(index){
     if(!ready||busy)return;busy=true;game.lock();
     enqueue(async()=>{

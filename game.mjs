@@ -1398,7 +1398,6 @@ root.addEventListener('click',event=>{
 document.querySelector('#reset').onclick=()=>{if(matchMode!=='online'&&confirm('Iniziare una nuova partita?'))start();};
 const titleScreen=document.querySelector('#title-screen');
 const matchHeader=document.querySelector('#match-header');
-const startLocal=document.querySelector('#start-local');
 const copyMatchLog=document.querySelector('#copy-match-log');
 const logExport=document.querySelector('#match-log-export');
 copyMatchLog.onclick=async()=>{
@@ -1418,7 +1417,7 @@ copyMatchLog.onclick=async()=>{
 const startSolo=document.querySelector('#start-solo');
 const startSpectator=document.querySelector('#start-spectator');
 const setupForm=document.querySelector('#computer-setup');
-const titleMenu=startLocal.parentElement;
+const titleMenu=document.querySelector('.title-menu');
 let selectedMatch='local';
 function openMatch(type,players){
   document.body?.classList.add('match-active');
@@ -1446,7 +1445,6 @@ function closeSetup(){
   setupForm.hidden=true;
   titleMenu.hidden=false;
 }
-startLocal.onclick=()=>openMatch('local',[null,null]);
 startSolo.onclick=()=>showSetup('solo');
 startSpectator.onclick=()=>showSetup('spectator');
 document.querySelector('#cancel-setup').onclick=()=>{
@@ -1482,7 +1480,7 @@ document.querySelector('#main-menu').onclick=()=>{
   document.body?.append(document.querySelector('#match-history'),document.querySelector('#action-caption'),document.querySelector('#route-caption'));
   root.replaceChildren();
   titleScreen.hidden=false;
-  (matchMode==='solo'?startSolo:matchMode==='spectator'?startSpectator:startLocal).focus();
+  (matchMode==='spectator'?startSpectator:startSolo).focus();
 };
 
 const reducedMotion=document.querySelector('#reduce-motion');
@@ -1494,7 +1492,7 @@ document.querySelector('#match-history').addEventListener('click',event=>{
 if(typeof document.addEventListener==='function')detailReader=setupDetails();
 
 // The host retains the rules and private state. Only recipient-specific HTML leaves it.
-if(typeof document.createElement==='function')import('./online.mjs?v=1').then(({setupOnline})=>{
+if(typeof document.createElement==='function')import('./online.mjs?v=2').then(({setupOnline})=>{
   onlineDriver=setupOnline({
     start(seed){seedOnline(seed);onlineSide=0;openMatch('online',[null,null]);},
     view(side){

@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=29">
+<link rel="stylesheet" href="./style.css?v=30">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -24,32 +24,36 @@
     <li><img src="./sprites/mage-1-lightning.png?v=7" alt="Simulacro di Fulmine blu"></li>
   </ul>
   <nav class="title-menu" aria-label="Modalità di gioco">
-    <button id="start-online" type="button"><span>Online con un amico</span><span class="title-menu-aside" aria-hidden="true">→</span><small>Invita tramite link · gratuito</small></button>
-    <button id="start-local" type="button">
-      <span>Giocatore vs Giocatore</span><span class="title-menu-aside" aria-hidden="true">→</span>
-      <small>Due giocatori sullo stesso dispositivo</small>
-    </button>
+    <button id="start-online" type="button" aria-controls="online-panel"><span>Giocatore vs Giocatore online</span><span class="title-menu-aside" aria-hidden="true">→</span></button>
     <button id="start-solo" type="button">
       <span>Giocatore vs Computer</span><span class="title-menu-aside" aria-hidden="true">→</span>
-      <small>Affronta il computer in solitaria</small>
     </button>
     <button id="start-spectator" type="button">
       <span>Computer vs Computer</span><span class="title-menu-aside" aria-hidden="true">→</span>
-      <small>Osserva due avversari automatici</small>
     </button>
   </nav>
-  <section id="online-panel" class="computer-setup" hidden aria-label="Partite online">
-    <h2>Online con un amico</h2>
-    <p>Gratuito, senza account. Chi invita tiene aperto il gioco. Alcune reti possono impedire il collegamento diretto.</p>
-    <button id="create-online" type="button">Crea invito</button>
-    <label>Link ricevuto <input id="join-link" type="url" placeholder="Incolla il link d’invito"></label>
-    <button id="join-online" type="button">Entra nella partita</button>
+  <section id="online-panel" class="title-setup" hidden aria-labelledby="online-title">
+    <button id="close-online" class="setup-back" type="button">← Indietro</button>
+    <h2 id="online-title" tabindex="-1">Partita online</h2>
+    <button id="create-online" class="setup-primary" type="button">Crea invito</button>
+    <div class="setup-divider"><span>oppure</span></div>
+    <form id="join-online-form" class="online-join">
+      <label for="join-link">Hai ricevuto un invito?</label>
+      <input id="join-link" type="url" placeholder="Incolla il link d’invito" required aria-describedby="online-status">
+      <button id="join-online" type="submit">Entra nella partita</button>
+    </form>
     <p id="online-status" role="status"></p>
-    <h3>Le tue partite salvate</h3><div id="online-saves"></div>
-    <label>Importa backup personale <input id="import-online" type="file" accept=".json,application/json"></label>
-    <button id="close-online" type="button">Chiudi</button>
+    <section id="online-saved-section" class="online-saved-section" hidden aria-labelledby="online-saved-title">
+      <h3 id="online-saved-title">Partite salvate</h3><div id="online-saves"></div>
+    </section>
+    <details class="online-import">
+      <summary>Importa una partita</summary>
+      <label for="import-online">Seleziona il tuo backup personale</label>
+      <input id="import-online" type="file" accept=".json,application/json">
+    </details>
   </section>
-  <form id="computer-setup" class="computer-setup" hidden>
+  <form id="computer-setup" class="computer-setup title-setup" hidden>
+    <button type="button" id="cancel-setup" class="setup-back">← Indietro</button>
     <h2 id="computer-mode"></h2>
     <label id="side-setting">Il tuo Arcimago
       <select id="human-side"><option value="0">Rosso</option><option value="1">Blu</option></select>
@@ -60,7 +64,7 @@
     <label id="blue-setting">Difficoltà del Blu
       <select id="blue-level"><option value="easy">Facile</option><option value="normal" selected>Normale</option><option value="hard">Difficile</option></select>
     </label>
-    <div><button type="submit">Inizia partita</button> <button type="button" id="cancel-setup">Indietro</button></div>
+    <button type="submit" class="setup-primary">Inizia partita</button>
   </form>
 </main>
 <header id="match-header" hidden>
@@ -100,5 +104,5 @@
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=16"></script>
+<script type="module" src="./game.mjs?v=17"></script>
 </html>

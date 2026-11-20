@@ -265,7 +265,7 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .title-menu {
   display: grid;
   gap: 10px;
-  width: min(100%, 360px);
+  width: min(100%, 400px);
 }
 .title-menu button {
   display: grid;
@@ -282,8 +282,7 @@ button:focus-visible{outline:2px solid #fff1d8;outline-offset:2px}
 .title-menu button:hover:not(:disabled),
 .title-menu button:focus-visible { background: #3b2d20; border-color: var(--gold); }
 .title-menu button:disabled { opacity: 1; color: #c2b39a; border-color: #56493a; }
-.title-menu small { color: #c2b39a; }
-.title-menu-aside { grid-column: 2; grid-row: 1 / span 2; color: var(--gold); }
+.title-menu-aside { grid-column: 2; grid-row: 1; color: var(--gold); }
 #match-header { flex-wrap: wrap; }
 .computer-setup {
   display: grid;
@@ -392,7 +391,63 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
 .online-bar{margin:8px auto;padding:10px 16px;max-width:1200px;background:#24392b;border:1px solid #89996c;border-radius:8px;color:#eee}
 .online-bar[hidden],#online-panel[hidden]{display:none}
 .online-bar p{margin:4px 0}.online-note{font-size:12px;opacity:.85}
-.online-bar input,#online-panel input[type=url]{width:min(460px,90%);padding:7px;background:#17291e;color:#fff;border:1px solid #82916b;border-radius:4px}
-#online-panel{max-width:600px;text-align:left}#online-panel label{display:block;margin:12px 0}
-#online-saves{display:flex;flex-wrap:wrap;gap:8px}#online-panel p{line-height:1.5}
+.online-bar input{width:min(460px,90%);padding:7px;background:#17291e;color:#fff;border:1px solid #82916b;border-radius:4px}
 #game[inert]{opacity:.8}#online-bar:not([hidden])~#game #history-mode,#online-bar:not([hidden])~#game #older-history{display:none}
+
+/* The title menu and its second level share the same warm, quiet frame. */
+.title-menu button{min-height:50px;box-shadow:none;line-height:1.4}
+.title-setup{
+  display:grid;gap:16px;width:min(100%,400px);padding:24px;
+  background:#231d18;border:1px solid #7e694b;border-radius:2px;
+  color:#efeadc;text-align:left;font-size:1rem;line-height:1.5;
+}
+.title-setup h2{color:#ead7b1;font:500 1.25rem/1.4 Georgia,serif;margin:0 0 4px}
+.title-setup h2:focus{outline:none}
+.title-setup h3{color:#d7c6a9;font:600 .875rem/1.5 system-ui,sans-serif}
+.title-setup button{
+  min-height:46px;padding:10px 14px;border:1px solid #7e694b;border-radius:2px;
+  background:#30251c;color:#efeadc;box-shadow:none;font-size:.9375rem;line-height:1.4;
+}
+.title-setup button:hover:not(:disabled){background:#3b2d20;border-color:var(--gold)}
+.title-setup .setup-primary{background:#493721;border-color:#b39662;color:#ffe2a4}
+.title-setup .setup-back{
+  justify-self:start;min-height:44px;margin:-12px 0 -10px -10px;padding:10px;
+  border-color:transparent;background:transparent;color:#c2b39a;font-size:.875rem;
+}
+.title-setup .setup-back:hover{color:#ffe2a4;background:transparent}
+.setup-divider{display:flex;align-items:center;gap:14px;color:#c2b39a;font-size:.875rem}
+.setup-divider::before,.setup-divider::after{content:"";height:1px;flex:1;background:#584731}
+.online-join{display:grid;gap:12px}
+.title-setup label{font-size:.875rem}
+.online-join input{
+  width:100%;min-width:0;min-height:46px;padding:10px 12px;font:inherit;font-size:.9375rem;
+  color:#efeadc;background:#191613;border:1px solid #7e694b;border-radius:2px;
+}
+.online-join input::placeholder{color:#b8ab96;opacity:1}
+.title-setup input:focus-visible,.title-setup select:focus-visible,.online-import summary:focus-visible{
+  outline:2px solid #ffe2a4;outline-offset:3px;
+}
+#online-status{color:#ffe2a4;font-size:.875rem;overflow-wrap:anywhere}
+#online-status:empty{display:none}
+.online-saved-section{display:grid;gap:12px;padding-top:20px;border-top:1px solid #584731}
+#online-saves{display:grid;gap:8px}
+#online-saves button{text-align:left;font-size:.875rem;overflow-wrap:anywhere}
+.online-import{padding-top:16px;border-top:1px solid #584731;color:#c2b39a;font-size:.875rem}
+.online-import summary{cursor:pointer;padding:6px 0;min-height:36px}
+.online-import summary:hover{color:#ffe2a4}
+.online-import label{display:block;margin:12px 0 8px}
+.online-import input{display:block;width:100%;min-width:0;font:inherit;color:#efeadc}
+.online-import input::file-selector-button{
+  padding:8px;margin-right:8px;border:1px solid #7e694b;border-radius:2px;
+  background:#30251c;color:#efeadc;font:inherit;cursor:pointer;
+}
+.computer-setup.title-setup{gap:20px}
+.computer-setup.title-setup select{min-height:44px;max-width:100%;font-size:.9375rem}
+@media(max-width:440px){.title-setup{padding:20px}.title-menu button{font-size:.9375rem}}
+#title-screen:has(.title-setup:not([hidden])){padding-block:24px}
+#title-screen:has(.title-setup:not([hidden])) .title-brand{padding-top:0}
+#title-screen:has(.title-setup:not([hidden])) .title-seal{width:64px;margin-bottom:10px}
+#title-screen:has(.title-setup:not([hidden])) #game-title{font-size:clamp(24px,7cqw,56px)}
+#title-screen:has(.title-setup:not([hidden])) .title-subtitle{margin-top:6px;font-size:11px}
+#title-screen:has(.title-setup:not([hidden])) .title-cast{margin-bottom:20px;margin-top:8px}
+#title-screen:has(.title-setup:not([hidden])) .title-cast li{width:44px}
