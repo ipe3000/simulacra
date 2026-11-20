@@ -49,14 +49,16 @@ const server=http.createServer((req,res)=>{
     const hr=(await records(host))[0],gr=(await records(guest))[0];assert.equal(hr.commands.length,45);assert.equal(hr.guest,gr.token);assert(!('seed'in gr));assert(!('commands'in gr));
     console.log('PASS 45 confirmed decisions including moves/spells and filtered guest storage');
     const turn=await host.locator('#turn').textContent();
-    await guest.reload();await guest.locator('#start-online').click();await guest.locator('#online-saves button').first().click();
+    await guest.reload();
     await guest.waitForFunction(()=>document.querySelector('#online-connection').textContent.includes('Collegato'),{},{timeout:45000});
-    assert.equal(await guest.locator('#turn').textContent(),turn);console.log('PASS guest reload and reserved seat recovery');
-    await host.reload();await host.locator('#start-online').click();await host.locator('#online-saves button').first().click();
-    await guest.locator('#reconnect-online').click();
+    assert.equal(await guest.locator('#turn').textContent(),turn);console.log('PASS automatic guest reload and reserved seat recovery');
+    await host.reload();
+    await host.waitForFunction(()=>document.querySelector('#online-connection').textContent.includes('Collegato'),{},{timeout:45000});
     await guest.waitForFunction(()=>document.querySelector('#online-connection').textContent.includes('Collegato'),{},{timeout:45000});
     assert.equal(await guest.locator('#turn').textContent(),turn);assert.equal(await host.locator('#turn').textContent(),turn);
-    console.log('PASS host journal replay and reconnection');
+    console.log('PASS automatic host journal replay and reconnection without guest interaction');
+    assert.equal(await host.locator('#online-bar').evaluate(e=>e.open),false);
+    assert.equal(await guest.locator('#online-notice').isVisible(),false);
     assert.deepEqual(errors,[]);const temp=require('node:os').tmpdir();await host.screenshot({path:path.join(temp,'simulacra-online-host-check.png'),fullPage:true});await guest.screenshot({path:path.join(temp,'simulacra-online-guest-check.png'),fullPage:true});
     console.log('PASS no browser errors');
   }catch(e){console.error('HOST:',await host.locator('#online-connection').textContent().catch(()=>''));console.error('GUEST:',await guest.locator('#online-connection').textContent().catch(()=>''));console.error('ERRORS',errors);throw e;}

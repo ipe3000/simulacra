@@ -1492,8 +1492,14 @@ document.querySelector('#match-history').addEventListener('click',event=>{
 if(typeof document.addEventListener==='function')detailReader=setupDetails();
 
 // The host retains the rules and private state. Only recipient-specific HTML leaves it.
-if(typeof document.createElement==='function')import('./online.mjs?v=2').then(({setupOnline})=>{
+if(typeof document.createElement==='function')import('./online.mjs?v=3').then(({setupOnline})=>{
   onlineDriver=setupOnline({
+    waiting(){
+      titleScreen.hidden=true;matchHeader.hidden=false;root.hidden=true;
+      document.body.classList.add('match-active');
+      document.querySelector('#turn').textContent='Ripresa della partita online…';
+      document.querySelector('#reset').hidden=true;copyMatchLog.hidden=true;
+    },
     start(seed){seedOnline(seed);onlineSide=0;openMatch('online',[null,null]);},
     view(side){
       onlineSide=side;historySignature='';showFullHistory=true;historyLimit=100000;render();

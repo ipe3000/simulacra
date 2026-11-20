@@ -388,11 +388,22 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
   .history-list{max-height:none}
 }
 /* Free private online rooms. */
-.online-bar{margin:8px auto;padding:10px 16px;max-width:1200px;background:#24392b;border:1px solid #89996c;border-radius:8px;color:#eee}
-.online-bar[hidden],#online-panel[hidden]{display:none}
-.online-bar p{margin:4px 0}.online-note{font-size:12px;opacity:.85}
-.online-bar input{width:min(460px,90%);padding:7px;background:#17291e;color:#fff;border:1px solid #82916b;border-radius:4px}
-#game[inert]{opacity:.8}#online-bar:not([hidden])~#game #history-mode,#online-bar:not([hidden])~#game #older-history{display:none}
+.online-bar>summary{font-size:12px;color:#cbd5bb;min-height:36px;display:flex;align-items:center;white-space:nowrap}
+.online-bar[data-state=reconnecting]>summary,.online-bar[data-state=error]>summary{color:#ffe0a3;border-color:#ccb27c}
+.online-details{width:320px;max-width:calc(100vw - 28px);max-height:calc(100dvh - 90px);overflow:auto;gap:12px;font-size:14px;line-height:1.5}
+.online-details button{min-height:44px;text-align:left}
+.online-details input{width:100%;min-width:0;padding:10px;margin:6px 0 8px;background:#17291e;color:#fff;border:1px solid #82916b;font:inherit}
+.online-note{font-size:13px;color:#c7ceb7}
+.online-notice{flex:none;margin:0;padding:8px 16px;background:#302f22;border-bottom:1px solid #81744e;color:#ffe0a3;font-size:14px;line-height:1.4}
+#game[inert]{opacity:.8}body:has(#online-bar:not([hidden])) #history-mode,body:has(#online-bar:not([hidden])) #older-history{display:none}
+@media(max-width:600px){.online-bar{position:static}.online-details{right:14px;top:auto;margin-top:4px}.online-bar>summary{min-height:44px}}
+@media(max-width:600px){
+  body:has(#online-bar:not([hidden])) #match-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px}
+  body:has(#online-bar:not([hidden])) #match-header h1{font-size:20px}
+  body:has(#online-bar:not([hidden])) #turn{grid-column:1/-1;grid-row:2;margin:0;font-size:13px}
+  #online-bar{grid-column:2;grid-row:1}
+  body:has(#online-bar:not([hidden])) #match-header>.match-menu:not(.online-bar){grid-column:3;grid-row:1}
+}
 
 /* The title menu and its second level share the same warm, quiet frame. */
 .title-menu button{min-height:50px;box-shadow:none;line-height:1.4}

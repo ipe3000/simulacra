@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=30">
+<link rel="stylesheet" href="./style.css?v=31">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -77,6 +77,17 @@
       <select id="computer-speed"><option value="1000">Lenta</option><option value="550" selected>Normale</option><option value="120">Rapida</option></select>
     </label>
   </div>
+  <details id="online-bar" class="online-bar match-menu" hidden>
+    <summary id="online-summary">Online · Connessione…</summary>
+    <div class="match-menu-content online-details">
+      <p id="online-connection" role="status"></p>
+      <div id="online-invite"><label for="online-link">Link d’invito</label><input id="online-link" readonly><button id="copy-invite" type="button">Copia invito</button></div>
+      <button id="reconnect-online" type="button" hidden>Riprova ora</button>
+      <button id="export-online" type="button">Esporta backup personale</button>
+      <p class="online-note">Il refresh riprende questa partita. Per cambiare browser o dispositivo, conserva il backup personale senza condividerlo.</p>
+      <button id="leave-online" type="button">Torna al menu</button>
+    </div>
+  </details>
   <details class="match-menu"><summary>Partita</summary><div class="match-menu-content">
   <button id="reset" type="button">Nuova partita</button>
   <button id="copy-match-log" type="button" hidden title="Il registro include le carte considerate nelle decisioni dei computer">Copia registro partita</button>
@@ -87,14 +98,7 @@
   </details>
   </div></details>
 </header>
-<section id="online-bar" class="online-bar" hidden aria-label="Collegamento online">
-  <p id="online-connection" role="status"></p>
-  <div id="online-invite"><label>Link d’invito <input id="online-link" readonly></label> <button id="copy-invite" type="button">Copia invito</button></div>
-  <button id="reconnect-online" type="button">Ricollega</button>
-  <button id="export-online" type="button">Esporta backup personale</button>
-  <button id="leave-online" type="button">Torna al menu</button>
-  <p class="online-note">Conserva il backup per recuperare il tuo posto. Contiene credenziali personali: non condividerlo come invito.</p>
-</section>
+<p id="online-notice" class="online-notice" role="status" hidden></p>
 <section id="action-caption" class="action-caption" aria-label="Ultima azione"></section>
 <p id="route-caption" class="route-caption" role="status"></p>
 <textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
@@ -104,5 +108,5 @@
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=17"></script>
+<script type="module" src="./game.mjs?v=18"></script>
 </html>

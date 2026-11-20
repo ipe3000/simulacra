@@ -22,11 +22,48 @@ export async function openStore(){
 export function setupOnline(game){
   const $=id=>document.getElementById(id);
   const panel=$('online-panel'),status=$('online-status'),bar=$('online-bar');
+  const sessionKey='simulacra-active-online';
   let store,record,peer,connection,ready=false,busy=false,queue=Promise.resolve(),generation=0,heartbeat,lastSeen=0;
+  let retryTimer,connectTimer,retries=0,everConnected=false,active=false;
+  const session={get(){try{return sessionStorage.getItem(sessionKey);}catch{return null;}},set(key){try{sessionStorage.setItem(sessionKey,key);}catch{}},clear(){try{sessionStorage.removeItem(sessionKey);}catch{}}};
   const say=t=>{status.textContent=t;$('online-connection').textContent=t;};
   const guarded=fn=>(...args)=>Promise.resolve().then(()=>fn(...args)).catch(fail);
-  function fail(e){ready=false;busy=false;game.lock();say(e?.message??String(e));}
-  function leave(){generation++;ready=false;clearInterval(heartbeat);connection?.close();peer?.destroy();connection=peer=null;bar.hidden=true;}
+  function state(name,text){
+    bar.dataset.state=name;
+    const labels={connected:'Collegato',waiting:'In attesa',connecting:'Connessione…',reconnecting:'Riconnessione…',error:'Da verificare'};
+    $('online-summary').textContent='Online · '+labels[name];
+    say(text);$('online-notice').textContent=text;
+    $('online-notice').hidden=name==='connected';
+    $('reconnect-online').hidden=!['error','reconnecting'].includes(name);
+  }
+  function fail(e){
+    ready=false;busy=false;clearTimeout(retryTimer);clearTimeout(connectTimer);game.lock();
+    if(active){state('error',e?.message??String(e));bar.open=true;}
+    else say(e?.message??String(e));
+  }
+  function disconnect(){
+    generation++;ready=false;clearInterval(heartbeat);clearTimeout(retryTimer);clearTimeout(connectTimer);
+    retryTimer=null;connectTimer=null;
+    connection?.close();peer?.destroy();connection=peer=null;
+  }
+  function leave(){active=false;disconnect();session.clear();bar.hidden=true;bar.open=false;$('online-notice').hidden=true;}
+  function connected(){
+    const first=!everConnected;everConnected=true;ready=true;retries=0;
+    clearTimeout(retryTimer);retryTimer=null;clearTimeout(connectTimer);
+    state('connected','Collegato · sei '+(record.role==='host'?'Rosso':'Blu')+'.');
+    if(first){
+      const focusInside=bar.contains(document.activeElement);bar.open=false;
+      if(focusInside)$('online-summary').focus();
+    }
+  }
+  function recover(){
+    if(!active||retryTimer)return;
+    ready=false;game.lock();clearTimeout(connectTimer);
+    state('reconnecting','Collegamento interrotto. La partita è salvata; riconnessione automatica in corso…');
+    const gen=generation,delay=Math.min(1000*2**retries++,8000);
+    retryTimer=setTimeout(()=>{retryTimer=null;if(active&&gen===generation)guarded(restart)();},delay);
+  }
+  async function restart(){await queue;if(!active)return;await connect();}
   function send(data){if(connection?.open)connection.send({protocol:ONLINE_VERSION,...data});}
   function enqueue(fn){const gen=generation;queue=queue.then(()=>{if(gen===generation)return fn();}).catch(fail);}
   function displayGuest(view){game.guest(view);if(ready&&!busy)game.unlock();else game.lock();}
@@ -48,8 +85,8 @@ export function setupOnline(game){
   }
   function bind(c,gen){
     lastSeen=Date.now();
-    c.on('close',()=>{if(gen!==generation||connection!==c)return;ready=false;game.lock();say('Collegamento interrotto. La partita è salvata: premi Ricollega.');});
-    c.on('error',e=>{if(gen===generation&&connection===c)fail(e);});
+    c.on('close',()=>{if(gen===generation&&connection===c)recover();});
+    c.on('error',()=>{if(gen===generation&&connection===c)recover();});
     c.on('data',m=>{
       if(gen!==generation||connection!==c||!m||m.protocol!==ONLINE_VERSION)return;
       lastSeen=Date.now();
@@ -59,52 +96,58 @@ export function setupOnline(game){
         if(record.role==='host'){
           if(m.type==='hello'){
             if(m.room!==record.room||m.invite!==record.invite||!/^[a-f0-9]{32}$/.test(m.token)||record.guest&&record.guest!==m.token){send({type:'rejected'});c.close();return;}
-            record.guest=m.token;await store.save(record);ready=true;say('Collegato · sei Rosso.');await snapshot();game.unlock();
+            record.guest=m.token;await store.save(record);connected();await snapshot();game.unlock();
           }else if(m.type==='command'&&ready&&m.token===record.guest&&typeof m.id==='string'&&m.id.length<=100){
             await apply({id:m.id,side:1,index:m.index},m.revision);
           }
-        }else if(m.type==='rejected'){fail(Error('Questo invito è già occupato o non è valido.'));}
+        }else if(m.type==='rejected'){disconnect();fail(Error('Questo invito è già occupato o non è valido.'));}
         else if(m.type==='view'&&Number.isInteger(m.revision)&&m.revision>=0&&m.view?.side===1&&typeof m.view.html==='string'){
           if(record.revision!==undefined&&m.revision<record.revision)throw Error('La cronologia dell’ospitante è precedente a quella salvata. Recupera il backup più recente.');
           record.revision=m.revision;
           if(record.pending&&m.ack===record.pending.id)record.pending=null;
-          await store.save(record);ready=true;busy=!!record.pending;say('Collegato · sei Blu.');displayGuest(m.view);
+          record.view=m.view;
+          await store.save(record);connected();busy=!!record.pending;displayGuest(m.view);
           if(record.pending)send({type:'command',...record.pending,token:record.token});
         }
       });
     });
   }
   async function connect(){
-    leave();const gen=generation;queue=Promise.resolve();busy=false;bar.hidden=false;game.lock();say('Connessione in corso…');
+    disconnect();const gen=generation;busy=false;bar.hidden=false;game.lock();
+    state(everConnected||retries?'reconnecting':'connecting',everConnected||retries?'Ripresa del collegamento in corso. La partita è salvata.':'Connessione in corso…');
     await loadPeer();if(gen!==generation)return;
     const options={debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}};
     peer=record.role==='host'?new Peer('simulacra-v1-'+record.room,options):new Peer(options);
     heartbeat=setInterval(()=>{
       if(gen!==generation||!ready)return;
-      if(Date.now()-lastSeen>45000){ready=false;game.lock();say('L’altro giocatore non risponde. La partita è salvata: premi Ricollega.');return;}
+      if(Date.now()-lastSeen>30000){recover();return;}
       send({type:'ping'});
     },10000);
-    peer.on('error',e=>{if(gen===generation)fail(Error('Connessione non riuscita ('+e.type+'). Riprova; alcune reti non consentono collegamenti diretti senza TURN.'));});
-    peer.on('disconnected',()=>{if(gen===generation&&!connection?.open){ready=false;game.lock();say('Servizio di collegamento scollegato. Premi Ricollega.');}});
+    peer.on('error',()=>{if(gen===generation)recover();});
+    peer.on('disconnected',()=>{if(gen===generation&&!connection?.open)recover();});
     peer.on('connection',c=>{
-      if(record.role!=='host'||connection?.open){c.on('open',()=>c.close());return;}
+      if(gen!==generation||record.role!=='host'||connection?.open){c.on('open',()=>c.close());return;}
       connection=c;ready=false;bind(c,gen);
     });
     peer.on('open',()=>{
       if(gen!==generation)return;
-      if(record.role==='host'){say('In attesa dell’amico. Condividi il link d’invito.');return;}
+      if(record.role==='host'){
+        if(!record.guest){clearTimeout(connectTimer);state('waiting','Copia il link e invialo all’altro giocatore.');}
+        return;
+      }
       connection=peer.connect('simulacra-v1-'+record.room,{reliable:true,serialization:'binary'});bind(connection,gen);
       connection.on('open',()=>send({type:'hello',room:record.room,invite:record.invite,token:record.token}));
     });
-    setTimeout(()=>{if(gen===generation&&!ready)say('Ancora in attesa. L’ospitante deve tenere aperta la partita. Se non si collega, prova un’altra rete o Ricollega.');},20000);
+    connectTimer=setTimeout(()=>{if(gen===generation&&!ready)recover();},15000);
   }
   function invitation(){const u=new URL(location.href);u.search='';u.hash='online='+record.room+'.'+record.invite;return u.href;}
   async function enter(r){
     await queue;
-    record=validateRecord(r);panel.hidden=true;$('computer-setup').hidden=true;
+    record=validateRecord(r);active=true;session.set(record.key);everConnected=!!record.guest||record.revision!==undefined;
+    panel.hidden=true;$('computer-setup').hidden=true;
     if(record.role==='host'){restore();$('online-link').value=invitation();}
-    else{$('online-link').value='';$('title-screen').hidden=true;}
-    $('online-invite').hidden=record.role!=='host';await connect();
+    else{$('online-link').value='';if(record.view)displayGuest(record.view);else game.waiting();}
+    $('online-invite').hidden=record.role!=='host';bar.open=record.role==='host'&&!record.guest;await connect();
   }
   async function list(){
     $('online-saves').replaceChildren();
@@ -133,7 +176,10 @@ export function setupOnline(game){
     if(!r){r={protocol:ONLINE_VERSION,key:'guest:'+m[1],role:'guest',room:m[1],invite:m[2],token:randomId()};await store.save(r);}await enter(r);
   });
   $('copy-invite').onclick=guarded(async()=>{try{await navigator.clipboard.writeText($('online-link').value);say('Invito copiato.');}catch{$('online-link').select();say('Seleziona e copia il link d’invito.');}});
-  $('reconnect-online').onclick=guarded(async()=>{await queue;if(record.role==='host')restore();await connect();});
+  $('reconnect-online').onclick=guarded(restart);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&bar.open){bar.open=false;$('online-summary').focus();}});
+  document.addEventListener('click',event=>{if(bar.open&&!bar.contains(event.target))bar.open=false;});
+  window.addEventListener('online',()=>{if(active&&!ready)guarded(restart)();});
   $('export-online').onclick=guarded(async()=>{
     await queue;
     if(!record)return;const blob=new Blob([JSON.stringify(record)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='simulacra-'+record.role+'-'+record.room+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -148,10 +194,21 @@ export function setupOnline(game){
     if(r.role==='host'){game.start(r.seed);for(const c of r.commands)game.apply(c.side,c.index);game.lock();}
     r.version=old?.version??0;await store.save(r);await enter(r);
   });
-  if(location.hash.startsWith('#online=')){
+  guarded(async()=>{
+    const key=session.get(),invite=/^#online=([a-f0-9]{32})\./.exec(location.hash);
+    if(key){
+      if(!store)store=await openStore();
+      const saved=(await store.all()).find(r=>r.key===key);
+      if(saved&&(!invite||saved.room===invite[1])){await enter(saved);return;}
+      session.clear();
+    }
+    if(!invite)return;
     $('join-link').value=location.href;showPanel();$('join-online').focus();
-    guarded(async()=>{if(!store)store=await openStore();await list();})();
-  }
+    if(!store)store=await openStore();
+    const saved=(await store.all()).find(r=>r.key==='guest:'+invite[1]);
+    if(saved&&saved.invite===location.hash.split('.')[1]){await enter(saved);return;}
+    await list();
+  })();
   return {leave,act(index){
     if(!ready||busy)return;busy=true;game.lock();
     enqueue(async()=>{
