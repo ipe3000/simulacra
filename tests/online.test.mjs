@@ -28,11 +28,11 @@ test('waiting recipient sees only own cards and no private selection text',()=>{
   assert(html.includes('Piede Svelto'));
 });
 
-test('online offers Veto window without a Veto and disables unavailable response',()=>{
+test('online skips the Veto window without a payable Veto',()=>{
   const g=gameHarness();
   g.run("matchMode='online';onlineSide=1;teams[1].hand=[];pending={id:'flash',defender:units[1]};offerVeto();");
-  assert.equal(g.run('phase'),'reaction');
-  assert.match(g.run('root.innerHTML'),/disabled>Veto Arcano/);
+  assert.notEqual(g.run('phase'),'reaction');
+  assert(!g.run('root.innerHTML').includes('Non reagire'));
 });
 
 test('backup validation rejects malformed journals and duplicate request IDs',()=>{

@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=32">
+<link rel="stylesheet" href="./style.css?v=33">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -84,6 +84,15 @@
     <summary id="online-summary">Online · Connessione…</summary>
     <div class="match-menu-content online-details">
       <p id="online-connection" role="status"></p>
+      <div id="time-control" hidden>
+        <label for="time-stop">Blocco Temporale · quando intervenire</label>
+        <select id="time-stop" aria-describedby="time-stop-hint">
+          <option value="off">Nessuno stop</option>
+          <option value="once">Prima della prossima azione</option>
+          <option value="turn">A ogni azione del turno nemico</option>
+        </select>
+        <p id="time-stop-hint"></p>
+      </div>
       <div id="online-invite"><label for="online-link">Link d’invito</label><input id="online-link" readonly><button id="copy-invite" type="button">Copia invito</button></div>
       <button id="reconnect-online" type="button" hidden>Riprova ora</button>
       <button id="export-online" type="button">Esporta backup personale</button>
@@ -111,5 +120,5 @@
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=19"></script>
+<script type="module" src="./game.mjs?v=20"></script>
 </html>

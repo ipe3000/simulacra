@@ -49,7 +49,7 @@ test('a broken connection retries automatically and an acknowledged move is not 
   const h=harness(record);await flush();const c=await h.hello();
   c.close();assert(h.locked);assert.equal(h.element('online-notice').hidden,false);
   await h.retry();assert.equal(h.peers.length,2);const next=await h.hello();
-  next.emit('data',{protocol:1,type:'command',id:'one',index:3,revision:0,token});await flush();
+  next.emit('data',{protocol:1,type:'command',id:'one',index:3,revision:0,token,rules:2});await flush();
   assert.deepEqual(h.applied,[[1,3]]);assert.equal(next.sent.at(-1).ack,'one');assert(!h.locked);
 });
 
@@ -70,4 +70,18 @@ test('explicit exit clears automatic resume and a different invitation takes pre
   const h=harness(hostRecord());await flush();h.driver.leave();assert.equal(h.sessions.size,0);
   const other=harness(hostRecord(),{hash:'#online='+'d'.repeat(32)+'.'+invite});await flush();
   assert.equal(other.peers.length,0);assert.equal(other.sessions.size,0);assert.equal(other.element('online-panel').hidden,false);
+});
+
+test('a remote stop setting is accepted even if the opponent has just advanced the revision',async()=>{
+  const h=harness(hostRecord());await flush();const c=await h.hello();
+  c.emit('data',{protocol:1,type:'command',id:'stop',index:9999,revision:0,token,rules:2});await flush();
+  assert.equal(h.saved.commands.length,2);assert.equal(h.saved.commands.at(-1).index,9999);
+  assert.equal(c.sent.at(-1).ack,'stop');
+});
+
+test('a pending pre-upgrade choice is cleared by synchronization without applying it to a different decision',async()=>{
+  const h=harness(hostRecord());await flush();const c=await h.hello();
+  c.emit('data',{protocol:1,type:'command',id:'old-pending',index:7,revision:1,token});await flush();
+  assert.equal(h.saved.commands.length,1);assert.deepEqual(h.applied,[[0,3]]);
+  assert.equal(c.sent.at(-1).ack,'old-pending');
 });

@@ -3,6 +3,7 @@ export function seededRandom(seed){return ()=>((seed=Math.imul(seed,1664525)+101
 export function validateRecord(r){
   if(!r||r.protocol!==ONLINE_VERSION||!['host','guest'].includes(r.role)||!/^[a-f0-9]{32}$/.test(r.room)||!/^[a-f0-9]{32}$/.test(r.invite))throw Error('Backup online non valido.');
   if(r.role==='host'&&(!Number.isInteger(r.seed)||!Array.isArray(r.commands)||r.commands.length>20000||r.commands.some(c=>!c||![0,1].includes(c.side)||!Number.isInteger(c.index)||c.index<0||c.index>10000||typeof c.id!=='string')||new Set(r.commands.map(c=>c.id)).size!==r.commands.length))throw Error('Cronologia online non valida.');
+  if(r.reactionRulesFrom!==undefined&&(!Number.isInteger(r.reactionRulesFrom)||r.reactionRulesFrom<0||r.role!=='host'||r.reactionRulesFrom>r.commands.length))throw Error('Versione delle reazioni non valida.');
   if(r.guest!==undefined&&!/^[a-f0-9]{32}$/.test(r.guest))throw Error('Credenziale non valida.');
   if(r.role==='guest'&&(!/^[a-f0-9]{32}$/.test(r.token)||r.revision!==undefined&&(!Number.isInteger(r.revision)||r.revision<0)||r.pending&&(!Number.isInteger(r.pending.index)||r.pending.index<0||!Number.isInteger(r.pending.revision)||r.pending.revision<0||typeof r.pending.id!=='string')))throw Error('Credenziale o richiesta in attesa non valida.');
   return r;
@@ -68,12 +69,21 @@ export function setupOnline(game){
   function enqueue(fn){const gen=generation;queue=queue.then(()=>{if(gen===generation)return fn();}).catch(fail);}
   function displayGuest(view){game.guest(view);if(ready&&!busy)game.unlock();else game.lock();}
   function views(){const guest=game.view(1);game.view(0);$('reset').hidden=true;return guest;}
-  function restore(){game.start(record.seed);for(const c of record.commands)game.apply(c.side,c.index);views();}
+  function replay(r){
+    const legacy=r.reactionRulesFrom??r.commands.length;
+    game.start(r.seed,legacy>0);
+    for(const [i,c] of r.commands.entries()){
+      if(i===legacy&&legacy>0)game.modernize?.();
+      game.apply(c.side,c.index);
+    }
+    if(legacy===r.commands.length&&legacy>0)game.modernize?.();
+  }
+  function restore(){replay(record);views();}
   async function snapshot(ack){const view=views();send({type:'view',view,revision:record.commands.length,ack});}
   async function apply(c,revision){
     const previous=record.commands.find(v=>v.id===c.id);
     if(previous){if(previous.side!==c.side||previous.index!==c.index)throw Error('Identificativo di comando incoerente.');await snapshot(c.id);return;}
-    if(revision!==record.commands.length){await snapshot(c.id);return;}
+    if(revision!==record.commands.length&&!(c.index>=9997&&c.index<=9999)){await snapshot(c.id);return;}
     if(![0,1].includes(c.side)||!Number.isInteger(c.index)||record.commands.length>=20000)throw Error('Comando online non valido.');
     game.lock();game.apply(c.side,c.index);record.commands.push(c);
     try{await store.save(record);}catch(e){record.commands.pop();restore();throw e;}
@@ -98,6 +108,8 @@ export function setupOnline(game){
             if(m.room!==record.room||m.invite!==record.invite||!/^[a-f0-9]{32}$/.test(m.token)||record.guest&&record.guest!==m.token){send({type:'rejected'});c.close();return;}
             record.guest=m.token;await store.save(record);connected();await snapshot();game.unlock();
           }else if(m.type==='command'&&ready&&m.token===record.guest&&typeof m.id==='string'&&m.id.length<=100){
+            // An unconfirmed choice from the previous rules must be selected again after migration.
+            if(m.rules!==2){await snapshot(m.id);return;}
             await apply({id:m.id,side:1,index:m.index},m.revision);
           }
         }else if(m.type==='rejected'){disconnect();fail(Error('Questo invito è già occupato o non è valido.'));}
@@ -143,7 +155,9 @@ export function setupOnline(game){
   function invitation(){const u=new URL(location.href);u.search='';u.hash='online='+record.room+'.'+record.invite;return u.href;}
   async function enter(r){
     await queue;
-    record=validateRecord(r);active=true;session.set(record.key);everConnected=!!record.guest||record.revision!==undefined;
+    record=validateRecord(r);
+    if(record.role==='host'&&record.reactionRulesFrom===undefined){record.reactionRulesFrom=record.commands.length;await store.save(record);}
+    active=true;session.set(record.key);everConnected=!!record.guest||record.revision!==undefined;
     const side=$('online-side');
     side.textContent=record.role==='host'?'Tu: Rosso':'Tu: Blu';
     side.dataset.side=record.role==='host'?'red':'blue';side.hidden=false;
@@ -194,7 +208,7 @@ export function setupOnline(game){
       if(r.role==='host'&&(old.seed!==r.seed||old.invite!==r.invite||old.commands.some((c,i)=>JSON.stringify(c)!==JSON.stringify(r.commands[i]))))throw Error('Backup precedente o divergente: il salvataggio esistente è stato conservato.');
       if(r.role==='guest'&&(old.token!==r.token||(old.revision??0)>(r.revision??0)))throw Error('Backup precedente o credenziale diversa.');
     }
-    if(r.role==='host'){game.start(r.seed);for(const c of r.commands)game.apply(c.side,c.index);game.lock();}
+    if(r.role==='host'){replay(r);game.lock();}
     r.version=old?.version??0;await store.save(r);await enter(r);
   });
   guarded(async()=>{
@@ -217,7 +231,7 @@ export function setupOnline(game){
     enqueue(async()=>{
       try{
         if(record.role==='host')await apply({side:0,index,id:randomId()},record.commands.length);
-        else{record.pending={id:randomId(),index,revision:record.revision};await store.save(record);send({type:'command',...record.pending,token:record.token});return;}
+        else{record.pending={id:randomId(),index,revision:record.revision,rules:2};await store.save(record);send({type:'command',...record.pending,token:record.token});return;}
       }finally{if(record.role==='host'){busy=false;if(ready)game.unlock();}}
     });
   }};

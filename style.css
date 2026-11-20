@@ -398,6 +398,17 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
 .online-details button{min-height:44px;text-align:left}
 .online-details input{width:100%;min-width:0;padding:10px;margin:6px 0 8px;background:#17291e;color:#fff;border:1px solid #82916b;font:inherit}
 .online-note{font-size:13px;color:#c7ceb7}
+#time-control{display:grid;gap:8px;padding:12px 0;border-block:1px solid #677152}
+#time-control select{width:100%;min-height:44px;background:#17291e;color:#fff1d8;border:1px solid #82916b;padding:8px;font:inherit}
+#time-stop-hint{font-size:13px;color:#d1d6c5}
+.time-control-link{float:right;max-width:70%;padding:1px 7px;margin:0 0 3px 6px;font-size:12px;line-height:1.5;color:#e1c7f1;background:#302638;border:1px solid #9477a9;box-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hand:has(.time-control-link) .cards{clear:both}
+.reaction-announcement #action-caption{border-color:#ad88cb;border-left-color:#c5a3df;background:#302738}
+.reaction-announcement #action-caption>strong{color:#ecd6ff}
+.reaction-hand .card:not(.reaction-available){opacity:.6}
+.reaction-hand .reaction-available{outline:2px solid #c5a3df;outline-offset:-2px}
+.reaction-window .decision-row{border-left:3px solid #ad88cb;padding-left:8px}
+.reaction-window .actions button{border-color:#ad88cb}
 .online-notice{flex:none;margin:0;padding:8px 16px;background:#302f22;border-bottom:1px solid #81744e;color:#ffe0a3;font-size:14px;line-height:1.4}
 #game[inert]{opacity:.8}body:has(#online-bar:not([hidden])) #history-mode,body:has(#online-bar:not([hidden])) #older-history{display:none}
 @media(max-width:600px){.online-bar{position:static}.online-details{right:14px;top:auto;margin-top:4px}.online-bar>summary{min-height:44px}}

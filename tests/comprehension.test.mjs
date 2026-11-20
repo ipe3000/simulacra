@@ -51,7 +51,7 @@ test('unavailable cards explain the rule instead of consuming the selection',()=
 test('Blocco Temporale identifies the interrupted turn and the deciding player separately',()=>{
   const g=gameHarness();
   g.run(`teams[1].hand=['timeBlock','stride'];begin();choice.options[0][1]();`);
-  assert.match(g.run(`document.querySelector('#turn').textContent`),/Turno: Rosso · Terra · Decide: Blu/);
+  assert.match(g.run(`document.querySelector('#turn').textContent`),/Turno: Rosso · Terra · Reazione: Blu/);
 });
 
 test('new matches clear history',()=>{

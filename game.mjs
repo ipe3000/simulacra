@@ -142,6 +142,9 @@ const maxHp=u=>u.type==='Terra'?8:6;
 const near=(u,n)=>paths([u.cell],n,(a,b)=>passable(u,a,b)?1:Infinity);
 const unitSpells=['swap','corrode','substitute','push','exchange','contagion','terrify','spray','giant','stasis'];
 let serial,nextFirst,reactionsLocked,utilityReaction,origin;
+let legacyReactions=false,timeStops;
+let timeControlAvailable=false;
+const timeSettings=['off','once','turn'];
 let creations;
 const edgeCreations=['wall','spiritWall','illusion','lightWall','portal'];
 const cellCreations=['cube','ballista'];
@@ -170,6 +173,7 @@ function start(){
   });
   const first=gameRandom()<.5?0:1;
   serial=0;nextFirst=null;reactionsLocked=false;utilityReaction=null;origin=null;
+  timeStops=[0,1].map(()=>({mode:'off',turn:null,skip:null}));
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
   phase='setup'; mode='move'; barriers=[null,null]; creations=[]; log=[]; winner=null; pending=null;choice=null;
@@ -342,6 +346,10 @@ function selectCreation(location){
 const baseMovement=u=>u.type==='Terra'?4:5;
 function begin(){
   const u=active();
+  for(const [side,stop] of timeStops.entries()){
+    if(stop.turn!==null&&stop.turn!==serial){if(stop.mode==='turn')stop.mode='off';stop.turn=null;stop.skip=null;}
+    if(stop.mode!=='off'&&stop.turn===null&&u.side!==side)stop.turn=serial;
+  }
   chronicle.turn({serial,round,side:u.side,unit:name(u)},publicState());inspected=u.id;
   teams.forEach(t=>{t.spent=0;t.reaction=false;});
   mode='move';u.attacked=false;u.played=[];u.pm=baseMovement(u);
@@ -453,7 +461,7 @@ function pay(u,cost){
   const reserve=Math.max(0,cost-u.pe);
   const t=teams[u.side];
   if(!affordable(u,cost))return false;
-  if(reserve&&!controllers[u.side]&&!window.confirm('Usare '+reserve+' dalla Riserva Arcana per coprire i PE mancanti?'))return false;
+  if(reserve&&matchMode!=='online'&&!controllers[u.side]&&!window.confirm('Usare '+reserve+' dalla Riserva Arcana per coprire i PE mancanti?'))return false;
   u.pe-=cost-reserve;t.reserve-=reserve;t.spent+=reserve;
   return true;
 }
@@ -477,35 +485,117 @@ function cast(id){
 }
 function canReact(u,id){
   const t=teams[u.side];
-  return !reactionsLocked&&!t.reaction&&t.hand.includes(id)&&affordable(u,cards[id][1]);
+  return !reactionsLocked&&!t.reaction&&t.hand.includes(id)&&affordable(u,cards[id][1])&&(legacyReactions||u.cell!==null&&u.hp>0);
 }
+function reactionCost(u,id){
+  const cost=cards[id][1],reserve=Math.max(0,cost-u.pe);
+  return reserve?(cost-reserve)+' PE + '+reserve+' Riserva':cost+' PE';
+}
+function declineReaction(){return legacyReactions?'Passa':'Non reagire';}
 function offerReaction(u,id,apply,pass){
   if(!canReact(u,id)){
-    if(matchMode==='online'&&!reactionsLocked&&!teams[u.side].reaction){choose('Reazione · '+name(u),[['Passa',pass]],u.side);return true;}
+    if(legacyReactions&&matchMode==='online'&&!reactionsLocked&&!teams[u.side].reaction){choose('Reazione · '+name(u),[['Passa',pass]],u.side);return true;}
     return false;
   }
-  choose('Reazione · '+name(u),[[cards[id][0],()=>{
+  choose('Reazione · '+name(u),[[cards[id][0]+(legacyReactions?'':' · '+reactionCost(u,id)),()=>{
     if(!pay(u,cards[id][1]))return;
     chronicle.reaction(publicCard(id,u));
     discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
     note(name(u)+' usa '+cards[id][0]+'.');signal(name(u)+' · '+cards[id][0],u);apply();
-  },{reaction:id,unit:u}],['Passa',pass]],u.side);
+  },{reaction:id,unit:u}],[declineReaction(),pass]],u.side);
   return true;
+}
+function timeUtilities(v){
+  const saved={order,phase,mode,origin,utilityReaction,played:v.played};
+  try{
+    order=[...order];order[index]=v.id;phase='action';mode='move';origin=null;utilityReaction={used:false};v.played=[];
+    return teams[v.side].hand.filter(id=>cards[id][2].startsWith('Utilità')&&affordable(v,cards[id][1]+1)&&canPlay(v,id)&&
+      (untargetedSpells.has(id)||legalCells(id,v).length||targets(id).length));
+  }finally{({order,phase,mode,origin,utilityReaction}=saved);v.played=saved.played;}
+}
+function timeCandidates(side){return units.filter(v=>v.side===side&&v.cell!==null&&canReact(v,'timeBlock')&&timeUtilities(v).length);}
+function timeBoundary(){return JSON.stringify([serial,units,teams,creations,barriers]);}
+function timeStopSetting(side,setting){
+  if(!['off','once','turn'].includes(setting))throw Error('Impostazione intervento non valida.');
+  if(setting!=='off'&&!timeCandidates(side).length)return false;
+  timeStops[side]={mode:setting,turn:active().side!==side&&phase!=='setup'?serial:null,skip:null};
+  if(setting!=='off'&&active().side!==side&&phase==='action'&&mode!=='jump'&&!pending&&!utilityReaction&&!origin?.required)mode='move';
+  render();
+  return true;
+}
+function timeControlState(side){
+  return {visible:matchMode==='online'&&phase!=='end'&&teams[side].hand.includes('timeBlock'),
+    available:timeCandidates(side).length>0,setting:timeStops[side].mode};
+}
+function updateTimeControl(state){
+  const control=document.querySelector('#time-control'),select=document.querySelector('#time-stop');
+  control.hidden=!state?.visible;select.value=state?.setting??'off';
+  timeControlAvailable=!!state?.available;select.disabled=!timeControlAvailable&&select.value==='off';
+  document.querySelector('#time-stop-hint').textContent=!state?.available?
+    'Servono Blocco Temporale, un’Utilità valida e PE o Riserva sufficienti per entrambi.':
+    state.setting==='off'?'Scegli uno stop per intervenire. Le azioni già confermate si completano.':
+    state.setting==='once'?'Ti verrà chiesto prima della prossima azione avversaria utile.':
+    'Ti verrà chiesto a ogni nuova azione di questo turno nemico; se è il tuo turno, del prossimo.';
+}
+function timeControl(){
+  if(matchMode!=='online')return '';
+  const state=timeControlState(onlineSide);
+  updateTimeControl(state);
+  if(!state.visible)return '';
+  const text=viewer===onlineSide&&reactionInfo()?.cards.includes('timeBlock')?'Intervento in corso':
+    {off:'Nessuno stop',once:'Stop alla prossima azione',turn:'Stop a ogni azione'}[state.setting];
+  return '<button type="button" class="time-control-link" data-time-open>Blocco Temporale · '+text+'</button>';
+}
+function reactionInfo(){
+  if(phase==='reaction')return {cards:['veto'],reason:name(active())+' sta lanciando '+cards[pending.id][0]+' su '+name(pending.defender)+'. Puoi annullarlo prima della risoluzione.',
+    publicReason:name(active())+' sta lanciando '+cards[pending.id][0]+' su '+name(pending.defender)+'. In attesa della risposta prima della risoluzione.'};
+  if(phase==='afterDamage')return {cards:['dash'],reason:name(choice.unit)+' ha subito danni. Scatto Fulmineo consente di spostarsi dopo il danno.'};
+  if(phase!=='selection')return null;
+  const options=choice.options.filter(v=>v[2]?.reaction);
+  if(!options.length)return null;
+  const ids=options.map(v=>v[2].reaction);
+  const reason=ids.includes('timeBlock')?'Stop richiesto con Blocco Temporale: scegli se lanciare un’Utilità prima della prossima azione di '+labels[active().side]+'.':
+    ids.includes('domain')?'Uno spostamento o teletrasporto sta per coinvolgere un tuo Simulacro. Dominio Spaziale può impedirlo.':
+    'Il movimento di '+name(active())+' consente una reazione: '+[...new Set(ids)].map(id=>cards[id][0]).join(', ')+'.';
+  const publicReason=ids.includes('timeBlock')?labels[viewer]+' ha richiesto un intervento prima della prossima azione di '+labels[active().side]+'.':
+    ids.includes('domain')?'Uno spostamento o teletrasporto coinvolge un Simulacro di '+labels[viewer]+'. In attesa della risposta.':
+    'Il movimento di '+name(active())+' consente una risposta di '+labels[viewer]+'. In attesa prima di proseguire.';
+  return {cards:ids,reason,publicReason};
+}
+function modernizeReactions(){
+  legacyReactions=false;
+  if(phase==='selection'&&choice&&(choice.options.some(v=>v[2]?.reaction==='timeBlock')||choice.text?.startsWith('Reazione')&&choice.options.length===1)){
+    choice.options.at(-1)[1]();return;
+  }
+  if(phase==='reaction'&&!canReact(pending.defender,'veto')){resolve(false);return;}
+  if(phase==='afterDamage'&&!canReact(choice.unit,'dash')){finishDash();return;}
+  render();
+}
+function offerPreparedTimeBlock(){
+  if(legacyReactions||matchMode!=='online'||phase!=='action'||mode!=='move'||pending||choice||utilityReaction||origin?.required||presenting||animatingMovement)return false;
+  const side=active().side,stop=timeStops[1-side];
+  if(stop.mode==='off'||stop.skip===timeBoundary()||!timeCandidates(1-side).length)return false;
+  offerTimeBlock(side,()=>show(side));return true;
 }
 function offerTimeBlock(side,done){
   const t=teams[1-side];
-  const candidates=units.filter(v=>v.side!==side&&v.cell!==null&&canReact(v,'timeBlock')&&
-    t.hand.some(id=>cards[id][2].startsWith('Utilità')&&cards[id][1]+1<=v.pe+Math.min(t.reserve,2-t.spent)));
-  if(!candidates.length&&!(matchMode==='online'&&!reactionsLocked&&!t.reaction&&units.some(v=>v.side!==side&&v.cell!==null))){done();return;}
+  const candidates=legacyReactions?units.filter(v=>v.side!==side&&v.cell!==null&&canReact(v,'timeBlock')&&
+    t.hand.some(id=>cards[id][2].startsWith('Utilità')&&cards[id][1]+1<=v.pe+Math.min(t.reserve,2-t.spent))):timeCandidates(1-side);
+  if(!candidates.length&&!(legacyReactions&&matchMode==='online'&&!reactionsLocked&&!t.reaction&&units.some(v=>v.side!==side&&v.cell!==null))){done();return;}
+  if(!legacyReactions&&matchMode==='online'){
+    const stop=timeStops[1-side];
+    if(stop.mode==='off'||stop.skip===timeBoundary()){done();return;}
+    stop.turn=serial;stop.skip=timeBoundary();if(stop.mode==='once')stop.mode='off';
+  }
   const resumeTurn=()=>{choice=null;if(phase!=='end')phase='action';done();};
-  choose('Reazione nel Turno avversario',[
-    ...candidates.map(v=>['Blocco Temporale · '+name(v),()=>{
+  choose(legacyReactions?'Reazione nel Turno avversario':'Blocco Temporale: intervieni prima della prossima azione di '+labels[side]+'.',[
+    ...candidates.map(v=>['Blocco Temporale · '+name(v)+(legacyReactions?'':' · '+reactionCost(v,'timeBlock')+' + costo Utilità'),()=>{
       if(!pay(v,1))return;
       chronicle.reaction(publicCard('timeBlock',v));
       discard(v.side,t.hand.indexOf('timeBlock'));t.reaction=true;
       utilityReaction={order,index,done:resumeTurn,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
       order=[...order];order[index]=v.id;v.played=[];choice=null;mode='move';phase='action';show(v.side);
-    },{reaction:'timeBlock',unit:v}]),['Passa',resumeTurn]],1-side);
+    },{reaction:'timeBlock',unit:v}]),[declineReaction(),resumeTurn]],1-side);
 }
 function finishTimeBlock(){
   const u=active(),saved=utilityReaction;
@@ -570,18 +660,18 @@ function movementReactions(u,from,to,done){
       if(!has(v,'Accecato')&&!has(u,'Invisibile')&&canReact(v,'presence'))options.push([v,'presence',()=>{u.pm=Math.max(0,u.pm-2);done();}]);
     }
   }
-  if(!options.length&&!(matchMode==='online'&&publicWindow)){done();return;}
+  if(!options.length&&!(legacyReactions&&matchMode==='online'&&publicWindow)){done();return;}
   choose('Reazione al movimento',[
-    ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v),()=>{
+    ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v)+(legacyReactions?'':' · '+reactionCost(v,id)),()=>{
       if(!pay(v,cards[id][1]))return;
       chronicle.reaction(publicCard(id,v));
       discard(v.side,teams[v.side].hand.indexOf(id));teams[v.side].reaction=true;apply();
-    },{reaction:id,unit:v}]),['Passa',done]],1-u.side);
+    },{reaction:id,unit:v}]),[declineReaction(),done]],1-u.side);
 }
 function offerVeto(){
   const {defender}=pending;
   const t=teams[defender.side];
-  if(!reactionsLocked&&!t.reaction&&(matchMode==='online'||t.hand.includes('veto')&&affordable(defender,3))){
+  if(!reactionsLocked&&!t.reaction&&(legacyReactions&&matchMode==='online'||canReact(defender,'veto'))){
     phase='reaction';mode='move';show(defender.side);
   }else resolve(false);
 }
@@ -683,7 +773,7 @@ function resolve(veto){
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
     if(!veto){
       const continueEffect=()=>{if(!additionalEffect(id,u,defender,hitCell))show(u.side);};
-      if(defender.cell!==null&&defender.hp<before&&(canReact(defender,'dash')||matchMode==='online'&&defender.type==='Fulmine'&&!reactionsLocked&&!teams[defender.side].reaction)){
+      if(defender.cell!==null&&defender.hp<before&&(canReact(defender,'dash')||legacyReactions&&matchMode==='online'&&defender.type==='Fulmine'&&!reactionsLocked&&!teams[defender.side].reaction)){
         choice={unit:defender,resume:mode,done:continueEffect};phase='afterDamage';show(defender.side);return;
       }
       continueEffect();return;
@@ -1217,6 +1307,12 @@ function renderChronicle(){
 }
 function renderAnnouncement(){
   const host=document.querySelector('#action-caption'),entry=chronicle.current;
+  const reaction=reactionInfo();
+  if(reaction){
+    const own=matchMode!=='online'||onlineSide===viewer;
+    host.innerHTML='<strong>'+(own?'Puoi reagire':'In attesa di '+labels[viewer])+'</strong><span>'+attr(own?reaction.reason:reaction.publicReason??reaction.reason)+'</span>';
+    return;
+  }
   if(!entry){host.innerHTML='<strong>'+(phase==='setup'?'Schieramento':'Inizio turno')+'</strong><span>Nome, autore, bersaglio ed esito dell’ultima azione compariranno qui.</span>';return;}
   const state=presenting||pending?'Lancio in attesa di risoluzione':entry.status;
   host.innerHTML='<button type="button" class="announcement-title" data-detail="'+attr(entryDetails(entry))+'">'+entry.title+'</button>'+
@@ -1239,6 +1335,7 @@ function line(e,cls,fn,tip){
 function render(){
   if(!animatingMovement&&origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
   if(!animatingMovement&&utilityReaction?.used&&(phase==='action'&&mode==='move'||phase==='end')){finishTimeBlock();return;}
+  if(offerPreparedTimeBlock())return;
   chronicle.observe(publicState());
   if(chronicle.current&&chronicle.current.status!=='Annullata')chronicle.current.status=
     pending?'In attesa di risoluzione':animatingMovement?'Movimento in corso':
@@ -1282,8 +1379,8 @@ function render(){
   if(visible&&phase==='action'&&utilityReaction&&!utilityReaction.used)controls=button('Termina Reazione',finishTimeBlock);
   if(visible&&phase==='action'&&origin?.required&&!origin.consumed)controls=button('Rinuncia al secondo incantesimo',()=>{origin=null;resume();});
   if(visible&&phase==='charge'&&t.hand.length<=6)controls=button('Ricarica senza scartare',advance);
-  if(visible&&phase==='reaction')controls=button('Veto Arcano · 3 PE',()=>resolve(true),canReact(pending.defender,'veto'))+button('Passa',()=>resolve(false));
-  if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · 1 PE',reactDash,canReact(choice.unit,'dash'))+button('Passa',finishDash);
+  if(visible&&phase==='reaction')controls=button('Veto Arcano · '+reactionCost(pending.defender,'veto'),()=>resolve(true),canReact(pending.defender,'veto'))+button(declineReaction(),()=>resolve(false));
+  if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · '+reactionCost(choice.unit,'dash'),reactDash,canReact(choice.unit,'dash'))+button(declineReaction(),finishDash);
   if(visible&&phase==='dash')controls=button('Resta qui',finishDash);
   if(visible&&phase==='selection')controls=choice.options.map(([label,fn])=>button(label,fn)).join('');
   if(visible&&phase==='choice'){
@@ -1306,7 +1403,8 @@ function render(){
       const previous=entries[position-1];
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
-      const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary;
+      const readyReaction=side===viewer&&reactionInfo()?.cards.includes(id);
+      const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary+(readyReaction?' reaction-available':'');
       const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description+
         (phase==='action'?'\n\n'+(reason?'Indisponibile: '+reason:'Disponibile. Seleziona la carta, poi scegli tra le posizioni evidenziate se richiesto.'):'');
       if(!interactiveHand)return button(content,()=>{},false,appearance,tooltip);
@@ -1327,17 +1425,19 @@ function render(){
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
   const turnUnit=utilityReaction?units[utilityReaction.order[utilityReaction.index]]:u;
+  const reaction=reactionInfo();
   turnBar.textContent=phase==='end'?'Vince l’Arcimago '+labels[winner]:
-    'Round '+round+' · Turno: '+(phase==='setup'?'Evocazione':name(turnUnit))+' · Decide: '+labels[viewer]+(automated?' (computer)':'');
+    'Round '+round+' · Turno: '+(phase==='setup'?'Evocazione':name(turnUnit))+(reaction||utilityReaction?' · Reazione: ':' · Decide: ')+labels[viewer]+(automated?' (computer)':'');
   const instruction=presenting?'Lancio in corso · '+cards[pending.id][0]+'.'
     :animatingMovement?'Movimento in corso.'
     :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
+    :reaction?(matchMode==='online'&&viewer!==onlineSide?'In attesa della reazione di '+labels[viewer]+'.':'Scegli una reazione oppure «Non reagire».')
     :matchMode==='online'&&viewer!==onlineSide?'Attendi la decisione di '+labels[viewer]+'.':choice?.text??prompt??'Completa la scelta o termina il Turno.';
   const historyHost=document.querySelector('#match-history'),announcementHost=document.querySelector('#action-caption'),routeHost=document.querySelector('#route-caption');
-  root.innerHTML='<div class="layout"><section class="play-area"><div id="announcement-slot"></div><div class="board-stage"><div class="board">'+board+'</div></div>'+
+  root.innerHTML='<div class="layout'+(reaction?' reaction-window':'')+'"><section class="play-area"><div id="announcement-slot"'+(reaction?' class="reaction-announcement" role="status"':'')+'></div><div class="board-stage"><div class="board">'+board+'</div></div>'+
     '<section class="decision-dock"><div class="decision-row"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div><span id="route-slot"></span></div>'+
-    '<section class="hand"><h3>'+(hand?(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide]):'Attendi la decisione indicata in alto')+'</h3><div class="cards">'+hand+'</div></section></section></section><aside class="panel"><section class="roster">'+
+    '<section class="hand'+(reaction&&viewer===onlineSide?' reaction-hand':'')+'">'+timeControl()+'<h3>'+(hand?(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide]):'Attendi la decisione indicata in alto')+'</h3><div class="cards">'+hand+'</div></section></section></section><aside class="panel"><section class="roster">'+
     teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" data-detail="'+attr(unitDetails(k))+'" aria-label="Esamina '+name(k)+'" class="unit-summary '+(k===u?'current-unit':'')+'"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE'+(k===u?' · '+k.pm+' PM':'')+'<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
     '</section><div id="history-slot"></div></aside></div>';
   document.querySelector('#announcement-slot').append?.(announcementHost);
@@ -1385,6 +1485,9 @@ root.addEventListener('focusout',event=>{
   if(event.target.matches('.card'))previewCard();
 });
 root.addEventListener('click',event=>{
+  if(event.target.closest('[data-time-open]')){
+    document.querySelector('#online-bar').open=true;document.querySelector('#time-stop').focus();return;
+  }
   const unit=event.target.closest('[data-inspect]');
   if(unit){inspected=Number(unit.dataset.inspect);return;}
   const b=event.target.closest('button[data-action]');
@@ -1484,6 +1587,10 @@ document.querySelector('#main-menu').onclick=()=>{
 };
 
 const reducedMotion=document.querySelector('#reduce-motion');
+document.querySelector('#time-stop').onchange=event=>{
+  const setting=timeSettings.indexOf(event.target.value);
+  if(setting>=0)onlineDriver?.act(9997+setting);
+};
 reducedMotion.checked=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 document.querySelector('#match-history').addEventListener('click',event=>{
   if(event.target.id==='history-mode'){showFullHistory=!showFullHistory;renderChronicle();}
@@ -1492,7 +1599,7 @@ document.querySelector('#match-history').addEventListener('click',event=>{
 if(typeof document.addEventListener==='function')detailReader=setupDetails();
 
 // The host retains the rules and private state. Only recipient-specific HTML leaves it.
-if(typeof document.createElement==='function')import('./online.mjs?v=4').then(({setupOnline})=>{
+if(typeof document.createElement==='function')import('./online.mjs?v=5').then(({setupOnline})=>{
   onlineDriver=setupOnline({
     waiting(){
       titleScreen.hidden=true;matchHeader.hidden=false;root.hidden=true;
@@ -1500,13 +1607,15 @@ if(typeof document.createElement==='function')import('./online.mjs?v=4').then(({
       document.querySelector('#turn').textContent='Ripresa della partita online…';
       document.querySelector('#reset').hidden=true;copyMatchLog.hidden=true;
     },
-    start(seed){seedOnline(seed);onlineSide=0;openMatch('online',[null,null]);},
+    start(seed,legacy=false){legacyReactions=legacy;seedOnline(seed);onlineSide=0;openMatch('online',[null,null]);},
+    modernize:modernizeReactions,
     view(side){
       onlineSide=side;historySignature='';showFullHistory=true;historyLimit=100000;render();
-      const view={html:root.innerHTML,turn:document.querySelector('#turn').textContent,side,decider:viewer};
+      const view={html:root.innerHTML,turn:document.querySelector('#turn').textContent,side,decider:viewer,timeControl:timeControlState(side)};
       return view;
     },
     apply(side,id){
+      if(!legacyReactions&&Number.isInteger(id)&&id>=9997&&id<=9999){timeStopSetting(side,timeSettings[id-9997]);return;}
       onlineSide=side;render();
       if(side!==viewer)throw new Error('Attendi la tua decisione.');
       const b=root.querySelector('button[data-action="'+id+'"]');
@@ -1524,8 +1633,10 @@ if(typeof document.createElement==='function')import('./online.mjs?v=4').then(({
         for(const a of [...node.attributes])if(!['class','id','title','tabindex','disabled','type','data-action','data-detail','data-inspect','role'].includes(a.name)&&!a.name.startsWith('aria-')&&!(a.name==='style'&&/^(left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;transform:rotate\((0|90)deg\))$/.test(a.value)))node.removeAttribute(a.name);
       }
       root.replaceChildren(template.content);document.querySelector('#turn').textContent=view.turn;
+      updateTimeControl(view.timeControl);
       document.querySelector('#reset').hidden=true;copyMatchLog.hidden=true;
     },
-    lock(){root.inert=true;},unlock(){root.inert=false;},
+    lock(){root.inert=true;document.querySelector('#time-stop').disabled=true;},
+    unlock(){root.inert=false;document.querySelector('#time-stop').disabled=!timeControlAvailable&&document.querySelector('#time-stop').value==='off';},
   });
 }).catch(error=>console.error('Online:',error));
