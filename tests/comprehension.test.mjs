@@ -12,6 +12,32 @@ test('a spell and Veto remain one action with actual outcomes and both card text
   assert(action.changes.some(c=>c.includes('Blu · Terra : −1 PF')));
   assert(!action.changes.some(c=>c.includes('Accecato')));
   assert.equal(action.target,'Blu · Terra');
+  const caption=g.run("document.querySelector('#action-caption').innerHTML");
+  assert.match(caption,/Blu · Terra usa Veto Arcano/);
+  assert.match(caption,/annullato.*perde 1 PF.*recupera 2 PE.*Rosso riprende/);
+});
+
+test('movement reactions identify the interruption, actual movement loss and resumption',()=>{
+  const g=gameHarness();
+  g.run(`matchMode='online';onlineSide=0;units[0].cell=30;units[1].cell=28;units[0].pm=1;
+    teams[1].hand=['chains'];chronicle.begin({title:'Movimento',actor:name(active())});
+    movementReactions(active(),29,30,()=>{choice=null;phase='action';show(0);});
+    choice.options[0][1]();`);
+  assert.match(g.run("document.querySelector('#action-caption').innerHTML"),/Catene Invisibili.*si interrompe.*perde 1 PM.*Rosso riprende/);
+  assert.equal(g.run('units[0].cell'),29);
+});
+
+test('Scatto is named only after it is played and the opponent can see who is still choosing',()=>{
+  const g=gameHarness();
+  g.run(`matchMode='online';onlineSide=0;units[0].cell=27;units[3].cell=28;
+    teams[0].hand=['flash'];teams[1].hand=['dash'];mode='flash';targetUnit(28);`);
+  const caption=()=>g.run("document.querySelector('#action-caption').innerHTML");
+  assert.match(caption(),/In attesa di Blu/);
+  assert.doesNotMatch(caption(),/Scatto Fulmineo/);
+  g.run('reactDash()');
+  assert.match(caption(),/Blu · Fulmine usa Scatto Fulmineo.*Blu deve completare la scelta/);
+  g.run('selectCell(legalCells()[0])');
+  assert.match(caption(),/si sposta.*danno è già stato applicato.*Rosso riprende/);
 });
 
 test('a turn transition preserves previous spells and reactions in history',()=>{
@@ -52,6 +78,8 @@ test('Blocco Temporale identifies the interrupted turn and the deciding player s
   const g=gameHarness();
   g.run(`teams[1].hand=['timeBlock','stride'];begin();choice.options[0][1]();`);
   assert.match(g.run(`document.querySelector('#turn').textContent`),/Turno: Rosso · Terra · Reazione: Blu/);
+  g.run("pick('stride')");
+  assert.match(g.run("document.querySelector('#action-caption').innerHTML"),/usa Blocco Temporale.*Piede Svelto.*Rallentato.*Rosso riprende/);
 });
 
 test('new matches clear history',()=>{

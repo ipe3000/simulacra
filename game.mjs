@@ -1,9 +1,9 @@
 import {cells,walls,zones,ritual,xy,center,neighbors,edge,mid,blocked,lineOfSight,wallBetween,paths,respawn} from './engine.mjs';
 import catalog from './catalogo-carte.json' with {type:'json'};
 import {chooseComputerAction} from './computer.mjs?v=2';
-import {createFeedback} from './feedback.mjs?v=2';
+import {createFeedback} from './feedback.mjs?v=3';
 import {createChronicle} from './chronicle.mjs?v=1';
-import {setupDetails} from './details.mjs?v=1';
+import {setupDetails} from './details.mjs?v=2';
 
 let onlineSide=0, onlineDriver=null, onlineSeed=1;
 let gameRandom=()=>Math.random();
@@ -107,6 +107,7 @@ const feedback=createFeedback(root);
 const chronicle=createChronicle();
 let detailReader={close(){}};
 let inspected=0,historyLimit=8,historySignature='',showFullHistory=false;
+let reactionNotice=null;
 const publicState=()=>({
   units:units.map(u=>({id:u.id,name:name(u),hp:u.hp,pe:u.pe,pm:u.pm,cell:u.cell,position:cellLabel(u.cell),conditions:{...u.conditions}})),
   teams:teams.map((t,i)=>({name:labels[i],reserve:t.reserve,kills:t.kills,ritual:t.ritual})),
@@ -154,6 +155,8 @@ function start(){
   clearTimeout(botTimer);
   cancelMovementAnimation();
   feedback.reset();visualEvents=[];
+  reactionNotice=null;
+  zoom=1;handOpen=false;touchTarget=null;lockedInterface=null;pendingBoardFocus=false;
   detailReader.close();showFullHistory=false;
   document.querySelector('.match-menu')?.removeAttribute?.('open');
   chronicle.reset();historyLimit=8;historySignature='';
@@ -171,13 +174,25 @@ function start(){
     const deck=makeDeck();
     return {hand:deck.splice(0,6),deck,discard:[],reserve:4,kills:0,ritual:0,spent:0,reaction:false};
   });
-  const first=gameRandom()<.5?0:1;
+  const first=matchMode==='training'||gameRandom()<.5?0:1;
   serial=0;nextFirst=null;reactionsLocked=false;utilityReaction=null;origin=null;
   timeStops=[0,1].map(()=>({mode:'off',turn:null,skip:null}));
   order=[first,1-first,first+2,3-first];
   index=0; round=1; setup=[first,first+2,1-first,3-first]; viewer=null;
   phase='setup'; mode='move'; barriers=[null,null]; creations=[]; log=[]; winner=null; pending=null;choice=null;
   inspected=setup[0];
+  if(matchMode==='training'){
+    teams[0].hand=['flash','stride'];teams[0].deck=['wall'];
+    teams[1].hand=trainingStep===2?['veto']:[];teams[1].deck=[];
+    if(trainingStep>0){
+      setup=[];round=2;serial=4;
+      const positions=[[11,15,66,68],[27,28,66,68],[12,15,66,68]][trainingStep-1];
+      units.forEach((unit,i)=>{unit.cell=positions[i];});
+      if(trainingStep===2)units[1].hp=2;
+      if(trainingStep===3)teams[0].kills=2;
+      begin();return;
+    }
+  }
   show(first);
 }
 function show(side){
@@ -490,13 +505,14 @@ function cast(id){
   const index=teams[u.side].hand.indexOf(id);
   if(id!=='arc'&&index<0)return false;
   if(!pay(u,cards[id][1]))return false;
+  if(!utilityReaction)reactionNotice=null;
   chronicle.begin({title:cards[id][0],actor:name(u),card:publicCard(id,u)});
   if(id!=='arc')discard(u.side,index);
   u.played.push(id);
   ritualReady=false;
   note(labels[u.side]+' lancia '+cards[id][0]+'.');
   signal(name(u)+' · '+cards[id][0],u,u.type==='Terra'?'earth-effect':'lightning-effect');
-  if(utilityReaction)utilityReaction.used=true;
+  if(utilityReaction){utilityReaction.used=true;utilityReaction.spell=id;}
   if(origin)origin.consumed=true;
   return true;
 }
@@ -509,6 +525,16 @@ function reactionCost(u,id){
   return reserve?(cost-reserve)+' PE + '+reserve+' Riserva':cost+' PE';
 }
 function declineReaction(){return legacyReactions?'Passa':'Non reagire';}
+function recordReaction(id,unit,message=''){
+  chronicle.reaction(publicCard(id,unit));
+  reactionNotice={title:name(unit)+' usa '+cards[id][0],message,unit:unit.id,affected:active().id,entry:chronicle.current};
+}
+function passReaction(side,done){
+  return ()=>{
+    reactionNotice={title:labels[side]+' passa',message:'L’azione prosegue.'};
+    done();
+  };
+}
 function offerReaction(u,id,apply,pass){
   if(!canReact(u,id)){
     if(legacyReactions&&matchMode==='online'&&!reactionsLocked&&!teams[u.side].reaction){choose('Reazione · '+name(u),[['Passa',pass]],u.side);return true;}
@@ -516,10 +542,10 @@ function offerReaction(u,id,apply,pass){
   }
   choose('Reazione · '+name(u),[[cards[id][0]+(legacyReactions?'':' · '+reactionCost(u,id)),()=>{
     if(!pay(u,cards[id][1]))return;
-    chronicle.reaction(publicCard(id,u));
+    recordReaction(id,u,id==='domain'?'Lo spostamento è annullato.':'');
     discard(u.side,teams[u.side].hand.indexOf(id));teams[u.side].reaction=true;
     note(name(u)+' usa '+cards[id][0]+'.');signal(name(u)+' · '+cards[id][0],u);apply();
-  },{reaction:id,unit:u}],[declineReaction(),pass]],u.side);
+  },{reaction:id,unit:u}],[declineReaction(),passReaction(u.side,pass)]],u.side);
   return true;
 }
 function timeUtilities(v){
@@ -566,7 +592,8 @@ function timeControl(){
 function reactionInfo(){
   if(phase==='reaction')return {cards:['veto'],reason:name(active())+' sta lanciando '+cards[pending.id][0]+' su '+name(pending.defender)+'. Puoi annullarlo prima della risoluzione.',
     publicReason:name(active())+' sta lanciando '+cards[pending.id][0]+' su '+name(pending.defender)+'. In attesa della risposta prima della risoluzione.'};
-  if(phase==='afterDamage')return {cards:['dash'],reason:name(choice.unit)+' ha subito danni. Scatto Fulmineo consente di spostarsi dopo il danno.'};
+  if(phase==='afterDamage')return {cards:['dash'],reason:name(choice.unit)+' ha subito danni. Scatto Fulmineo consente di spostarsi dopo il danno.',
+    publicReason:name(choice.unit)+' ha subito danni. In attesa della risposta.'};
   if(phase!=='selection')return null;
   const options=choice.options.filter(v=>v[2]?.reaction);
   if(!options.length)return null;
@@ -608,15 +635,18 @@ function offerTimeBlock(side,done){
   choose(legacyReactions?'Reazione nel Turno avversario':'Blocco Temporale: intervieni prima della prossima azione di '+labels[side]+'.',[
     ...candidates.map(v=>['Blocco Temporale · '+name(v)+(legacyReactions?'':' · '+reactionCost(v,'timeBlock')+' + costo Utilità'),()=>{
       if(!pay(v,1))return;
-      chronicle.reaction(publicCard('timeBlock',v));
+      chronicle.begin({title:cards.timeBlock[0],actor:name(v)});
+      recordReaction('timeBlock',v);
       discard(v.side,t.hand.indexOf('timeBlock'));t.reaction=true;
-      utilityReaction={order,index,done:resumeTurn,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played};
+      utilityReaction={order,index,done:resumeTurn,locked:reactionsLocked,used:false,turnMode:mode,ritualReady,played:v.played,notice:reactionNotice};
       order=[...order];order[index]=v.id;v.played=[];choice=null;mode='move';phase='action';show(v.side);
-    },{reaction:'timeBlock',unit:v}]),[declineReaction(),resumeTurn]],1-side);
+    },{reaction:'timeBlock',unit:v}]),[declineReaction(),passReaction(1-side,resumeTurn)]],1-side);
 }
 function finishTimeBlock(){
   const u=active(),saved=utilityReaction;
   applyCondition(u,'Rallentato');u.played=saved.played;
+  reactionNotice=saved.notice;
+  reactionNotice.message=[saved.spell&&'Utilità: '+cards[saved.spell][0]+'.',name(u)+' è Rallentato.'].filter(Boolean).join(' ');
   ({order,index,ritualReady}=saved);reactionsLocked=saved.locked;
   utilityReaction=null;origin=null;choice=null;mode=saved.turnMode;
   if(phase!=='end')phase='action';
@@ -664,7 +694,13 @@ function movementReactions(u,from,to,done){
     const was=distance(v.cell,from)===1,now=distance(v.cell,to)===1;
     if(!reactionsLocked&&!teams[v.side].reaction&&((!was&&now)||(was&&!now)))publicWindow=true;
     if(!was&&now&&canReact(v,'shield')){
-      options.push([v,'shield',()=>moveEffect(u,movementCells(u,2).filter(c=>distance(c,v.cell)>distance(to,v.cell)),done,true,v.side)]);
+      options.push([v,'shield',()=>{
+        const response=reactionNotice;
+        moveEffect(u,movementCells(u,2).filter(c=>distance(c,v.cell)>distance(to,v.cell)),()=>{
+          response.message=u.cell===to?name(u)+' resta nella stessa casella.':name(u)+' viene spostato in '+cellLabel(u.cell)+'.';
+          done();
+        },true,v.side);
+      }]);
     }
     if(was&&!now&&canReact(v,'chains')&&!at(from)){
       options.push([v,'chains',()=>{u.cell=from;u.pm=Math.max(0,u.pm-2);done();}]);
@@ -681,9 +717,10 @@ function movementReactions(u,from,to,done){
   choose('Reazione al movimento',[
     ...options.map(([v,id,apply])=>[cards[id][0]+' · '+name(v)+(legacyReactions?'':' · '+reactionCost(v,id)),()=>{
       if(!pay(v,cards[id][1]))return;
-      chronicle.reaction(publicCard(id,v));
+      recordReaction(id,v,id==='chains'?'Il movimento si interrompe. '+name(u)+' torna alla casella precedente e perde '+Math.min(2,u.pm)+' PM.':
+        id==='presence'?name(u)+' perde '+Math.min(2,u.pm)+' PM.':'');
       discard(v.side,teams[v.side].hand.indexOf(id));teams[v.side].reaction=true;apply();
-    },{reaction:id,unit:v}]),[declineReaction(),done]],1-u.side);
+    },{reaction:id,unit:v}]),[declineReaction(),passReaction(1-u.side,done)]],1-u.side);
 }
 function offerVeto(){
   const {defender}=pending;
@@ -764,18 +801,20 @@ function additionalEffect(id,u,v,hitCell=v.cell){
 }
 function resolve(veto){
   const {id,defender}=pending,u=active();
+  const before=defender.hp,energy=u.pe,hitCell=defender.cell;
   if(veto){
     if(!pay(defender,3))return;
-    chronicle.reaction(publicCard('veto',defender));
+    recordReaction('veto',defender);
     if(chronicle.current)chronicle.current.status='Annullata';
     discard(defender.side,teams[defender.side].hand.indexOf('veto'));
     teams[defender.side].reaction=true;
     note(labels[defender.side]+' annulla l’incantesimo con Veto Arcano.');
     signal('Veto Arcano · incantesimo annullato',defender,'veto-effect','⊘');
+  }else if(phase==='reaction'&&canReact(defender,'veto')){
+    reactionNotice={title:labels[defender.side]+' passa',message:'L’incantesimo prosegue.'};
   }
   phase='action';pending=null;mode='move';
   const effect=attacks[id];
-  const before=defender.hp,hitCell=defender.cell;
   if(veto||isAttack(id))damage(defender,veto||id==='arc'?1:effect?.damage??2);
   if(!veto&&phase!=='end'){
     applyCondition(defender,effect?.condition??afflictions[id]);
@@ -786,7 +825,12 @@ function resolve(veto){
   }
   clearCurses();
   if(phase!=='end'){
-    if(veto){u.pe=Math.min(4,u.pe+2);draw(u.side);}
+    if(veto){
+      u.pe=Math.min(4,u.pe+2);
+      const drew=draw(u.side);
+      reactionNotice.message=['L’incantesimo '+cards[id][0]+' è annullato.',before>defender.hp&&name(defender)+' perde '+(before-defender.hp)+' PF.',
+        u.pe>energy&&name(u)+' recupera '+(u.pe-energy)+' PE.',drew&&labels[u.side]+' pesca 1 carta.'].filter(Boolean).join(' ');
+    }
     if(!veto&&id==='cut'){mode='jump';if(!legalCells().length)mode='move';}
     if(!veto){
       const continueEffect=()=>{if(!additionalEffect(id,u,defender,hitCell))show(u.side);};
@@ -796,6 +840,7 @@ function resolve(veto){
       continueEffect();return;
     }
   }
+  if(veto&&!reactionNotice.message)reactionNotice.message='L’incantesimo '+cards[id][0]+' è annullato. '+name(defender)+' cade.';
   show(u.side);
 }
 function traverse(u,route,done,spendPm=false){
@@ -857,13 +902,17 @@ function cancelMovementAnimation(){
   animatingMovement=false;
 }
 function finishDash(){
-  const {resume:next,done}=choice;
+  const {resume:next,done,unit,from}=choice;
+  if(from!==undefined&&reactionNotice)reactionNotice.message=unit.cell===from?
+    name(unit)+' resta nella stessa casella.':name(unit)+' si sposta in '+cellLabel(unit.cell)+'. Il danno è già stato applicato.';
+  if(phase==='afterDamage'&&canReact(unit,'dash'))reactionNotice={title:labels[unit.side]+' passa',message:'Il danno è già stato applicato.'};
   mode=next;phase='action';choice=null;done();
 }
 function reactDash(){
   const u=choice.unit,t=teams[u.side];
   if(!pay(u,1))return;
-  chronicle.reaction(publicCard('dash',u));
+  recordReaction('dash',u);
+  choice.from=u.cell;
   discard(u.side,t.hand.indexOf('dash'));t.reaction=true;
   note(name(u)+' usa Scatto Fulmineo.');
   phase='dash';render();
@@ -900,6 +949,7 @@ function selectCell(c,selection=mode){
   else if(mode==='jump'){u.cell=c;mode='move';}
   else{
     const route=walk(u).get(c);
+    reactionNotice=null;
     chronicle.begin({title:'Movimento',actor:name(u)});
     ritualReady=false;u.moved=true;
     traverse(u,route.route,spent=>{
@@ -913,11 +963,13 @@ function selectCell(c,selection=mode){
   clearCurses();render();
 }
 function charge(){
+  reactionNotice=null;
   phase='charge';mode='move';render();
 }
 function advance(){
   const u=active(),t=teams[u.side];
   if(t.hand.length>6)return;
+  reactionNotice=null;
   chronicle.begin({title:'Caricamento',actor:name(u)});
   while(t.hand.length<6&&(t.deck.length||t.discard.length))draw(u.side);
   u.pe=4;u.pm=0;
@@ -940,6 +992,7 @@ function advance(){
 }
 function ritualAction(){
   const u=active(),t=teams[u.side];
+  reactionNotice=null;
   chronicle.begin({title:'Rituale',actor:name(u)});
   t.ritual++;t.reserve=Math.min(4,t.reserve+2);
   note(labels[u.side]+' completa il Rituale.');
@@ -1029,6 +1082,7 @@ function finishChoice(){
 function destroy(i){
   const u=active(),t=teams[u.side],e=barriers[1-u.side];
   if(!e||!pay(u,cards[t.hand[i]][1]))return;
+  reactionNotice=null;
   chronicle.begin({title:'Distruzione della Barriera di Forza',actor:name(u)});
   discard(u.side,i);barriers[1-u.side]=null;ritualReady=false;
   note('Barriera di Forza distrutta.');render();
@@ -1245,6 +1299,7 @@ function scheduleComputer(){
   spectatorControls.hidden=matchMode!=='spectator';
   toggleComputers.textContent=paused?'Avvia':'Pausa';
   const finished=phase==='end'||botStopped;
+  if(matchMode==='spectator')document.querySelector('#spectator-state').textContent=finished?'Osservazione terminata':paused?'Osservazione in pausa':'';
   document.querySelector('#copy-match-log').hidden=matchMode==='local'||matchMode==='online';
   toggleComputers.disabled=finished;
   stepComputers.disabled=finished||!paused||animatingMovement||presenting;
@@ -1311,19 +1366,24 @@ function entryDetails(e){
 function renderChronicle(){
   const host=document.querySelector('#match-history');host.hidden=false;
   const perspective=matchMode==='online'?onlineSide:matchMode==='solo'?controllers.findIndex(v=>!v):viewer;
-  const signature=JSON.stringify([chronicle.turns,perspective,historyLimit,showFullHistory]);
+  const current=chronicle.turns.at(-1);
+  const showCurrent=Boolean(reactionNotice&&current?.side===perspective);
+  const signature=JSON.stringify([chronicle.turns,perspective,historyLimit,showFullHistory,showCurrent]);
   if(signature===historySignature)return;historySignature=signature;
   const scroll=host.querySelector('.history-list')?.scrollTop??0;
   const enemy=[...chronicle.turns].reverse().find(t=>t.side!==perspective);
-  const actionText=e=>'<li><button type="button" class="history-entry" data-detail="'+attr(entryDetails(e))+'"><strong>'+e.title+
-    (e.cards.length>1?' + '+e.cards.slice(1).map(c=>cards[c.id][0]).join(', '):'')+'</strong><span>'+e.actor+(e.target?' → '+e.target:'')+
+  const actionText=e=>{
+    const replies=e.cards.filter((card,i)=>i!==0||cards[card.id][0]!==e.title);
+    return '<li><button type="button" class="history-entry" data-detail="'+attr(entryDetails(e))+'"><strong>'+e.title+
+    (replies.length?' + '+replies.map(c=>cards[c.id][0]).join(', '):'')+'</strong><span>'+e.actor+(e.target?' → '+e.target:'')+
     '</span><small>'+e.status+' · dettagli ↗</small></button></li>';
+  };
   const turnText=t=>'<section class="history-turn"><h3>R'+t.round+' · '+t.unit+' · '+(t.complete?'concluso':'in corso')+'</h3>'+
     (t.entries.length?'<ol>'+t.entries.map(actionText).join('')+'</ol>':'<p class="muted">Nessuna azione ancora eseguita.</p>')+'</section>';
-  host.innerHTML='<div class="history-heading"><h2>'+(showFullHistory?'Cronologia':'Ultimo turno avversario')+'</h2>'+
+  host.innerHTML='<div class="history-heading"><h2>'+(showFullHistory?'Cronologia':showCurrent?'Turno in corso':'Ultimo turno avversario')+'</h2>'+
     '<button type="button" id="history-mode">'+(showFullHistory?'Ultimo turno':'Tutti i turni')+'</button></div>'+
     '<div class="history-list" tabindex="0" aria-label="Azioni del turno">'+
-    (showFullHistory?[...chronicle.turns].reverse().slice(0,historyLimit).map(turnText).join(''):
+    (showFullHistory?[...chronicle.turns].reverse().slice(0,historyLimit).map(turnText).join(''):showCurrent?turnText(current):
       enemy?turnText(enemy):'<p class="muted">L’avversario non ha ancora svolto un turno.</p>')+
     (showFullHistory&&chronicle.turns.length>historyLimit?'<button type="button" id="older-history">Mostra precedenti</button>':'')+'</div>'+
     '<p class="history-hint">Sosta, focus o clic su una voce per i dettagli.</p>';
@@ -1333,20 +1393,35 @@ function renderAnnouncement(){
   const host=document.querySelector('#action-caption'),entry=chronicle.current;
   const reaction=reactionInfo();
   if(reaction){
-    const own=matchMode!=='online'||onlineSide===viewer;
+    const own=matchMode==='online'?onlineSide===viewer:!controllers[viewer];
     host.innerHTML='<strong>'+(own?'Puoi reagire':'In attesa di '+labels[viewer])+'</strong><span>'+attr(own?reaction.reason:reaction.publicReason??reaction.reason)+'</span>';
     return;
   }
-  if(!entry){host.innerHTML='<strong>'+(phase==='setup'?'Schieramento':'Inizio turno')+'</strong><span>Nome, autore, bersaglio ed esito dell’ultima azione compariranno qui.</span>';return;}
+  if(reactionNotice){
+    const ongoing=utilityReaction||phase==='dash'||phase==='selection';
+    const reference=entry&&reactionNotice.entry&&entry!==reactionNotice.entry?
+      entryDetails(reactionNotice.entry)+'\n\n'+entryDetails(entry):entry&&entryDetails(entry);
+    const direction=ongoing?labels[viewer]+' deve completare la scelta.':
+      phase==='end'?'Partita conclusa.':controllers[viewer]?labels[viewer]+' (computer) riprende.':labels[viewer]+' riprende.';
+    host.innerHTML='<button type="button" class="announcement-title"'+(reference?' data-detail="'+attr(reference)+'"':'')+'>'+attr(reactionNotice.title)+'</button>'+
+      '<span>'+attr([reactionNotice.message,direction].filter(Boolean).join(' '))+'</span>';
+    return;
+  }
+  if(!entry){
+    const [title,hint]=phase==='setup'?['Schieramento','Piazza '+name(units[setup[0]])+' nella sua Zona Evocazione.']:
+      phase==='charge'?['Caricamento','Prepara la mano e recupera energia per il prossimo turno.']:
+      phase==='spawn'?['Rinascita','Scegli una casella evidenziata.']:['Inizio turno','Muoviti, lancia un incantesimo o passa al Caricamento.'];
+    host.innerHTML='<strong>'+title+'</strong><span>'+hint+'</span>';return;
+  }
   const state=presenting||pending?'Lancio in attesa di risoluzione':entry.status;
   host.innerHTML='<button type="button" class="announcement-title" data-detail="'+attr(entryDetails(entry))+'">'+entry.title+'</button>'+
     '<span>'+entry.actor+(entry.target?' → '+entry.target:'')+' · <strong>'+state+'</strong>'+
     (entry.cards.length>1?' · '+entry.cards.slice(1).map(c=>cards[c.id][0]).join(', '):'')+'</span>';
 }
-function button(label,fn,enabled=true,cls='',tip=''){
+function button(label,fn,enabled=true,cls='',tip='',metadata=''){
   const i=actions.push(fn)-1;
   const unavailable=(cls.startsWith('cell ')||cls.startsWith('card '))?(cls.startsWith('card ')?'aria-disabled="true"':'aria-disabled="true" tabindex="-1"'):'disabled';
-  return '<button type="button" data-action="'+i+'" class="'+cls+'" '+(cls.startsWith('card ')?'data-detail="'+attr(tip)+'"':'title="'+attr(tip)+'"')+' '+(enabled?'':unavailable)+'>'+label+'</button>';
+  return '<button type="button" data-action="'+i+'" class="'+cls+'" title="'+attr(tip)+'" '+metadata+' '+(enabled?'':unavailable)+'>'+label+'</button>';
 }
 function line(e,cls,fn,tip){
   const [x,y,a,b]=e;
@@ -1354,7 +1429,31 @@ function line(e,cls,fn,tip){
   const style='left:'+(x/13*100)+'%;top:'+(y/6*100)+'%;width:'+((vert?b-y:a-x)/13*100)+'%;transform:rotate('+(vert?90:0)+'deg)';
   if(!fn)return '<span class="'+cls+(vert?' vertical':'')+'" style="'+style+'" title="'+attr(tip)+'"></span>';
   const i=actions.push(fn)-1;
-  return '<button title="'+attr(tip)+'" aria-label="'+attr(tip)+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
+  const label=tip+' · confine da ('+(x+1)+','+(y+1)+') verso '+(vert?'il basso':'destra');
+  return '<button type="button" title="'+attr(label)+'" aria-label="'+attr(label)+'" data-focus-key="edge-'+e.join('-')+'" class="'+cls+'" style="'+style+'" data-action="'+i+'"></button>';
+}
+function ritualHint(u){
+  if(!ritual.includes(u.cell))return 'Rituale: inizia un turno su un sigillo verde.';
+  if(!canRitual())return 'Rituale bloccato: c’è un nemico adiacente.';
+  if(!ritualReady)return 'Rituale: aspetta il prossimo turno di questo Simulacro.';
+  return teams[u.side].kills>=2?'Il Rituale ti fa vincere.':'Il Rituale dà 1 punto, recupera fino a 2 Riserva e apre il Caricamento.';
+}
+function targetPrompt(){
+  if(mode==='move')return 'Scegli una destinazione o un incantesimo.';
+  if(mode==='jump')return 'Scegli la destinazione del teletrasporto.';
+  if(mode==='dissolve'||mode==='relocate')return 'Scegli una Creazione evidenziata.';
+  if(edgeCreations.includes(mode))return 'Scegli un confine evidenziato.';
+  if(cellCreations.includes(mode)||mode==='leap')return 'Scegli una casella evidenziata.';
+  if(mode==='arc'||mode==='cut')return 'Scegli un bersaglio a gittata '+effectiveRange(active(),cards[mode][2])+'.';
+  return 'Scegli un Simulacro evidenziato.';
+}
+function boardStatus(unit,placing){
+  const team=teams[unit.side],available=Math.min(team.reserve,2-team.spent);
+  return '<div class="board-status"><div class="board-unit"><strong>'+name(unit)+'</strong>'+
+    (placing?' <span>· Schieramento</span>':' <span>· '+unit.hp+' PF · '+unit.pe+' PE · '+unit.pm+' PM · '+available+' Riserva spendibile</span>')+
+    '</div><p class="board-objective">Vittoria · 2 uccisioni e 1 Rituale</p><div class="board-tools" aria-label="Inquadratura del Labirinto">'+
+    '<button type="button" data-ui="zoom-less" aria-label="Riduci ingrandimento">−</button><button type="button" data-ui="zoom-more" aria-label="Ingrandisci Labirinto">+</button>'+
+    '<button type="button" data-ui="zoom-reset">Intero</button><button type="button" data-ui="confirm-cell" hidden>Conferma</button></div></div>';
 }
 function render(){
   if(!animatingMovement&&origin?.consumed&&phase==='action'&&mode!=='jump')origin=null;
@@ -1365,13 +1464,19 @@ function render(){
     pending?'In attesa di risoluzione':animatingMovement?'Movimento in corso':
     ['reaction','afterDamage','dash','selection','choice','probe'].includes(phase)||mode==='jump'?'Scelta in corso':'Risolta';
   actions.length=0;
+  const previousUI=readInterface();
   const u=active(),t=teams[u.side];
+  const placing=phase==='setup',turnUnit=utilityReaction?units[utilityReaction.order[utilityReaction.index]]:u;
+  const shownUnit=placing?units[setup[0]]:turnUnit;
   const automated=Boolean(controllers[viewer]);
   const visible=viewer!==null&&!automated&&!animatingMovement&&!presenting&&(matchMode!=='online'||viewer===onlineSide);
   const valid=visible?legalCells():[];
   const movement=phase==='action'&&mode==='move'&&valid.length?walk(u):null;
-  const title={setup:'Evocazione · '+name(units[setup[0]]??u),spawn:'Rinascita · '+name(u),action:name(u),charge:'Caricamento · '+name(u),reaction:'Reazione · '+labels[pending?.defender.side],probe:'Sonda Telepatica',end:'Vince l’Arcimago '+labels[winner]}[phase];
-  const prompt={setup:'Scegli una casella della tua Zona Evocazione.',spawn:'Scegli una delle caselle libere evidenziate.',action:{move:'Scegli una destinazione o un incantesimo.',arc:'Scegli un nemico a Tocco.',cut:'Scegli un nemico a Tocco.',wall:'Scegli un confine evidenziato.',jump:'Scegli la destinazione del teletrasporto.',dissolve:'Scegli una Creazione visibile.'}[mode]??'Scegli un Simulacro evidenziato.',charge:t.hand.length>6?'Scarta '+(t.hand.length-6)+' per tornare a sei carte. Il turno passerà automaticamente.':'Scarta una carta per ricaricare e concludere il turno, oppure ricarica senza scartare.',reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Scegli una carta da scartare dalla mano avversaria.',end:'Due punti uccisione e un punto rituale.'}[phase];
+  const drawCount=Math.min(Math.max(0,6-t.hand.length),t.deck.length+t.discard.length);
+  const prompt={setup:'Piazza '+name(shownUnit)+' in una casella evidenziata.',spawn:'Scegli dove far rinascere '+name(u)+'.',
+    action:targetPrompt(),charge:t.hand.length>6?'Scarta '+(t.hand.length-6)+' per tornare a sei carte. Poi recuperi PE e il turno termina.':
+      'Recuperi PE fino a 4'+(drawCount?' e peschi '+drawCount+(drawCount===1?' carta':' carte'):'')+'. Puoi scartare una carta prima di terminare.',
+    reaction:'Puoi annullare l’incantesimo con Veto Arcano.',probe:'Leggi le carte avversarie e scegli quale scartare.',end:'Due punti uccisioni e un punto rituale.'}[phase];
   let board=cells.map(c=>{
     const token=at(c);
     const object=creations.find(v=>v.cell===c);
@@ -1385,9 +1490,13 @@ function render(){
       z==='ritual'&&'Zona Rituale. Inizia qui la Fase di Azione senza nemici adiacenti per poter compiere il Rituale.',
       (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu')+'. Serve per schieramento e rinascita. Nel primo Round protegge dagli Attacchi i propri Simulacri.',
     ].filter(Boolean).join('\n');
+    const label=['Casella '+(x+1)+', '+(y+1),token&&name(token),object&&cards[object.id][0],z==='ritual'&&'Zona Rituale',
+      (z==='redzone'||z==='bluezone')&&'Zona Evocazione '+(z==='redzone'?'Rossa':'Blu'),cost!=null&&cost+' PM'].filter(Boolean).join(' · ');
+    const route=legal&&movement?.get(c)?.route;
     return button((object?'<span class="creation '+object.id+(object.side?' blue':'')+'" aria-hidden="true"></span>':'')+
       (token?'<span class="token '+(token.type==='Terra'?'earth ':'lightning ')+(token.side?'blue ':'')+(token===u&&phase!=='setup'?'active':'')+(object?' on-creation':'')+'" aria-hidden="true"></span><span class="condition-badges">'+Object.keys(token.conditions).map(k=>'<span title="'+attr(k+' · '+conditions[k])+'">'+({Accecato:'◉',Vulnerabile:'!',Pietrificato:'◆',Rallentato:'⌛',Invisibile:'◌',Confuso:'?',Maledetto:'☠'}[k])+'<span class="sr">'+k+'</span></span>').join('')+'</span>':object?'':cost??'<span class="sr">Casella '+(x+1)+', '+(y+1)+'</span>'),
-      ()=>selectCell(c),legal,'cell '+z+(legal?' legal':''),tip);
+      ()=>selectCell(c),legal,'cell '+z+(legal?' legal':'')+(token?(token.id===reactionNotice?.unit?' reacted-cell':token.id===reactionNotice?.affected?' affected-cell':''):''),
+      tip,'aria-label="'+attr(label)+'" data-focus-key="cell-'+c+'"'+(route?' data-route="'+route.join(',')+'" data-cost="'+cost+'"':''));
   }).join('');
   board+=walls.map(e=>line(e,'wall',null,'Muro. Blocca il movimento e la linea di vista, anche sulla punta.')).join('');
   barriers.forEach((e,i)=>{if(e)board+=line(e,'edge barrier force '+(i?'blue':''),null,'Barriera di Forza · '+labels[i]+'. '+cards.wall[3]);});
@@ -1395,14 +1504,16 @@ function render(){
   if(visible)board+=targets().map(e=>line(e,'edge target',()=>selectCreation({edge:e}),cards[mode][0])).join('');
   let controls='',hand='';
   if(visible&&phase==='action'&&mode!=='jump'&&!utilityReaction&&!origin?.required){
-    controls=button('Muovi',()=>pick('move'),true,mode==='move'?'selected':'')
-      +button('Colpo Arcano',()=>pick('arc'),canAttack(u)&&!u.played.includes('arc'),mode==='arc'?'selected':'')
-      +button('Rituale',ritualAction,ritualReady&&canRitual())
-      +button('Caricamento',charge);
+    const noArcTarget=!legalCells('arc').length;
+    controls=button(mode==='move'?'Muovi':'Annulla selezione',()=>pick('move'),true,mode==='move'?'selected':'','','data-focus-key="move"'+(mode!=='move'?' data-cancel-target="true"':''))
+      +button('Colpo Arcano',()=>pick('arc'),canAttack(u)&&!u.played.includes('arc'),mode==='arc'?'selected':'',
+        noArcTarget?'Nessun bersaglio valido a gittata '+effectiveRange(u,cards.arc[2])+'.':'Infligge 1 danno.','data-focus-key="arc"'+(noArcTarget?' data-ui-blocked="true"':''))
+      +button('Rituale',ritualAction,ritualReady&&canRitual(),'','','data-focus-key="ritual"')
+      +button('Fine Azione',charge,true,'','Apri il Caricamento.','data-focus-key="charge"');
   }
   if(visible&&phase==='action'&&utilityReaction&&!utilityReaction.used)controls=button('Termina Reazione',finishTimeBlock);
   if(visible&&phase==='action'&&origin?.required&&!origin.consumed)controls=button('Rinuncia al secondo incantesimo',()=>{origin=null;resume();});
-  if(visible&&phase==='charge'&&t.hand.length<=6)controls=button('Ricarica senza scartare',advance);
+  if(visible&&phase==='charge'&&t.hand.length<=6)controls=button('Termina senza scartare',advance);
   if(visible&&phase==='reaction')controls=button('Veto Arcano · '+reactionCost(pending.defender,'veto'),()=>resolve(true),canReact(pending.defender,'veto'))+button(declineReaction(),()=>resolve(false));
   if(visible&&phase==='afterDamage')controls=button('Scatto Fulmineo · '+reactionCost(choice.unit,'dash'),reactDash,canReact(choice.unit,'dash'))+button(declineReaction(),finishDash);
   if(visible&&phase==='dash')controls=button('Resta qui',finishDash);
@@ -1417,7 +1528,7 @@ function render(){
   }
   const interactiveHand=visible&&['action','charge','probe'].includes(phase);
   const humanSide=controllers.findIndex(level=>!level);
-  const showOwnHand=(matchMode==='solo'||matchMode==='online')&&phase!=='end';
+  const showOwnHand=(matchMode==='solo'||matchMode==='online'||matchMode==='training')&&phase!=='end';
   const handSide=interactiveHand?(phase==='probe'?1-u.side:u.side):showOwnHand?(matchMode==='online'?onlineSide:humanSide):null;
   if(handSide!==null){
     const side=handSide;
@@ -1428,19 +1539,38 @@ function render(){
       const boundary=previous&&(previous.type!==type||previous.range!==range)?' group-start':'';
       const content='<span class="card-type">'+type+'</span><strong>'+label+'</strong><small>'+cost+' PE · '+range+'</small>';
       const readyReaction=side===viewer&&reactionInfo()?.cards.includes(id);
-      const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+boundary+(readyReaction?' reaction-available':'');
+      const canBreakBarrier=interactiveHand&&phase==='action'&&mode!=='jump'&&canDestroy(u,id);
+      const [availability,status]=readyReaction?['reaction-ready','Reazione disponibile']:
+        playable?['available',mode===id?'Bersaglio da scegliere':'Giocabile ora']:
+        canBreakBarrier?['available','Distruggi barriera']:
+        interactiveHand&&['charge','probe'].includes(phase)?['discardable','Puoi scartarla']:
+        type==='Reazione'?['reaction-wait','Attende una Reazione']:
+        !interactiveHand?['unavailable','In attesa del turno']:
+        ['unavailable',reason.startsWith('PE insufficienti')?'PE insufficienti':
+          reason.startsWith('Nessun bersaglio')?'Nessun bersaglio valido':'Non giocabile ora'];
+      const appearance='card '+({Attacco:'attack',Reazione:'reaction',Utilità:'utility'}[type]??'')+' '+(mode===id?'selected':'')+(readyReaction?' reaction-available':'');
       const tooltip=label+'\n'+type+' · '+range+' · '+cost+' PE\n'+description+
-        (phase==='action'?'\n\n'+(reason?'Indisponibile: '+reason:'Disponibile. Seleziona la carta, poi scegli tra le posizioni evidenziate se richiesto.'):'');
-      if(!interactiveHand)return button(content,()=>{},false,appearance,tooltip);
-      if(phase==='charge'){
-        return '<div class="discard-card">'+button(content,()=>{},true,appearance,tooltip)+
-          button('Scarta',()=>discardForCharge(side,i),true,'discard-button','Scarta '+label)+'</div>';
+        (phase==='action'?'\n\n'+(reason?'Indisponibile: '+reason:'Costo effettivo: '+reactionCost(u,id)+'.'):'');
+      const key='card-'+side+'-'+id+'-'+i;
+      const read='<button type="button" class="'+appearance+' availability-'+availability+'" data-focus-key="'+key+'" aria-label="'+attr('Leggi '+label+' · '+status+' · '+cost+' PE · '+range)+'" data-detail="'+attr(tooltip)+'">'+content+'<span class="card-status">'+status+'</span></button>';
+      if(!interactiveHand){
+        actions.push(null);
+        return '<div class="hand-card'+boundary+'">'+read+'</div>';
       }
-      return button(content,()=>{
+      if(phase==='charge'){
+        // A reading control previously occupied this slot in online journals.
+        actions.push(null);
+        return '<div class="hand-card discard-card'+boundary+'">'+read+
+          button(t.hand.length<=7?'Scarta e termina':'Scarta',()=>discardForCharge(side,i),true,'discard-button','Scarta '+label)+'</div>';
+      }
+      const playLabel=phase==='probe'?'Scarta':untargetedSpells.has(id)?'Lancia':'Scegli bersaglio';
+      const play=button(playLabel+(phase==='action'&&cost>u.pe?' · '+Math.max(0,cost-u.pe)+' Riserva':''),()=>{
         if(phase==='probe')discardFromProbe(side,i);
         else pick(id);
-      },playable||phase!=='action',appearance,tooltip)+
-      (phase==='action'&&mode!=='jump'&&canDestroy(u,id)?button('Scarta per distruggere',()=>destroy(i)):'');
+      },playable||phase!=='action','play-card',reason||playLabel+' · '+reactionCost(u,id),
+      'aria-label="'+attr(playLabel+' · '+label+(phase==='probe'?'':' · '+reactionCost(u,id)))+'"');
+      const destroyAction=canBreakBarrier?button('Scarta per distruggere',()=>destroy(i)):'';
+      return '<div class="hand-card'+boundary+'">'+read+(playable||phase!=='action'?play:'')+destroyAction+'</div>';
     }).join('');
     if(visible&&phase==='probe'&&!hand)controls=button('Continua',()=>{phase='action';render();});
   }
@@ -1448,79 +1578,162 @@ function render(){
   turnBar.className=viewer?'turn-blue':'turn-red';
   const choiceTitle=phase==='choice'?cards[choice.id][0]:phase==='afterDamage'||phase==='dash'?'Scatto Fulmineo · '+name(choice.unit):phase==='selection'?'Tocca a '+labels[viewer]:null;
   const publicTitle=phase==='setup'?'Evocazione':phase==='spawn'?'Rinascita':name(u);
-  const turnUnit=utilityReaction?units[utilityReaction.order[utilityReaction.index]]:u;
   const reaction=reactionInfo();
   turnBar.textContent=phase==='end'?'Vince l’Arcimago '+labels[winner]:
-    'Round '+round+' · Turno: '+(phase==='setup'?'Evocazione':name(turnUnit))+(reaction||utilityReaction?' · Reazione: ':' · Decide: ')+labels[viewer]+(automated?' (computer)':'');
+    'Round '+round+' · Turno: '+(placing?'Evocazione di '+name(shownUnit):name(turnUnit))+(reaction||utilityReaction||phase==='dash'?' · Reazione: ':' · Decide: ')+labels[viewer]+(automated?' (computer)':'');
   const instruction=presenting?'Lancio in corso · '+cards[pending.id][0]+'.'
     :animatingMovement?'Movimento in corso.'
     :botStopped?'Partita interrotta. Il computer non ha una scelta disponibile.'
+    :matchMode==='spectator'?'Modalità spettatore.'
     :automated&&phase!=='end'?'Decisione al computer '+labels[viewer]+'.'
     :reaction?(matchMode==='online'&&viewer!==onlineSide?'In attesa della reazione di '+labels[viewer]+'.':'Scegli una reazione oppure «Non reagire».')
     :matchMode==='online'&&viewer!==onlineSide?'Attendi la decisione di '+labels[viewer]+'.':choice?.text??prompt??'Completa la scelta o termina il Turno.';
   const historyHost=document.querySelector('#match-history'),announcementHost=document.querySelector('#action-caption'),routeHost=document.querySelector('#route-caption');
-  root.innerHTML='<div class="layout'+(reaction?' reaction-window':'')+'"><section class="play-area"><div id="announcement-slot"'+(reaction?' class="reaction-announcement" role="status"':'')+'></div><div class="board-stage"><div class="board">'+board+'</div></div>'+
+  if(phase==='end'&&matchMode!=='training'){
+    controls=(matchMode!=='online'?'<button type="button" data-ui="rematch">Rigioca</button>':'')+
+      '<button type="button" data-ui="menu">Menu principale</button>';
+  }
+  const practice=matchMode==='training'?trainingPanel():'';
+  routeHost.textContent='';
+  root.innerHTML='<div class="layout'+(reaction?' reaction-window':'')+'"><section class="play-area">'+boardStatus(shownUnit,placing)+
+    '<div id="announcement-slot"'+(reaction||reactionNotice?' class="reaction-announcement"':'')+'></div><div class="board-stage"><div class="board">'+board+'</div></div>'+
     '<section class="decision-dock"><div class="decision-row"><p class="instruction">'+instruction+'</p><div class="actions">'+controls+'</div><span id="route-slot"></span></div>'+
-    '<section class="hand'+(reaction&&viewer===onlineSide?' reaction-hand':'')+'">'+timeControl()+'<h3>'+(hand?(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide]):'Attendi la decisione indicata in alto')+'</h3><div class="cards">'+hand+'</div></section></section></section><aside class="panel"><section class="roster">'+
-    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' uccisioni · '+v.ritual+' rituali · '+v.reserve+' riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" data-detail="'+attr(unitDetails(k))+'" aria-label="Esamina '+name(k)+'" class="unit-summary '+(k===u?'current-unit':'')+'"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE'+(k===u?' · '+k.pm+' PM':'')+'<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
+    (visible&&phase==='action'&&!utilityReaction&&!origin?.required?'<p class="ritual-hint">'+ritualHint(u)+'</p>':'')+
+    '<section class="hand'+(!hand?' empty-hand':'')+(phase==='charge'||phase==='probe'?' required-hand':'')+(reaction&&viewer===onlineSide?' reaction-hand':'')+'">'+timeControl()+
+    (hand?'<button type="button" class="hand-toggle" data-ui="hand" aria-controls="match-cards" aria-expanded="false">Mostra mano</button><h3>'+(interactiveHand&&phase==='probe'?'Mano avversaria':'Mano · '+labels[handSide])+'</h3>':'')+'<div class="cards" id="match-cards">'+hand+'</div></section></section></section><aside class="panel">'+practice+'<section class="roster">'+
+    teams.map((v,i)=>'<div class="team '+(i?'blue':'')+'"><strong>'+labels[i]+'</strong><div class="stats">'+v.kills+' / 2 uccisioni · '+v.ritual+' / 1 Rituale · '+v.reserve+' Riserva</div>'+units.filter(k=>k.side===i).map(k=>'<button type="button" data-inspect="'+k.id+'" data-detail="'+attr(unitDetails(k))+'" aria-label="Esamina '+name(k)+'" class="unit-summary '+(k===shownUnit?'current-unit':'')+'"><strong>'+k.type+'</strong> · '+k.hp+' PF · '+k.pe+' PE'+(k===shownUnit?' · '+k.pm+' PM':'')+'<small>'+ (Object.keys(k.conditions).join(' · ')||'Nessuna Condizione')+'</small></button>').join('')+'</div>').join('')+
     '</section><div id="history-slot"></div></aside></div>';
   document.querySelector('#announcement-slot').append?.(announcementHost);
   document.querySelector('#history-slot').append?.(historyHost);
   document.querySelector('#route-slot').append?.(routeHost);
-  previewCard();
   if(matchMode!=='online')feedback.update({units,teams,creations,phase,winner,moving:animatingMovement,active:u.id,labels,viewerLabel:labels[viewer],choiceText:choice?.text,
     pending:pending?{from:spellOrigin(u),to:pending.defender.cell,label:cards[pending.id][0]+' → '+name(pending.defender)}:null,
     events:visualEvents});
   visualEvents=[];
   renderAnnouncement();renderChronicle();
+  restoreInterface(previousUI);
   scheduleComputer();
 }
-function previewCard(card=root.querySelector('.card.selected')){
-  const detail=root.querySelector('#card-detail');
-  if(detail)detail.textContent=card?.dataset.detail||card?.title||'';
+let zoom=1,handOpen=false,touchTarget=null,lockedInterface=null,pendingBoardFocus=false;
+const boardChoices='.cell.legal, .edge.target';
+function readInterface(){
+  const focus=document.activeElement,stage=root.querySelector('.board-stage'),hand=root.querySelector('.cards');
+  return {focus:root.contains?.(focus)?focus:null,left:stage?.scrollLeft??0,top:stage?.scrollTop??0,cards:hand?.scrollLeft??0};
 }
-root.addEventListener('pointerover',event=>{
-  const card=event.target.closest('.card');
-  if(card)previewCard(card);
-  const cell=event.target.closest('.cell.legal');
-  if(matchMode==='online')return;
-  if(cell&&phase==='action'&&mode==='move'&&!animatingMovement&&!presenting){
-    const list=[...root.querySelectorAll('.cell')],destination=list.indexOf(cell);
-    const path=walk(active()).get(destination);
-    for(const node of list)node.classList.remove('route-preview');
-    if(path){
-      path.route.forEach(c=>list[c].classList.add('route-preview'));
-      document.querySelector('#route-caption').textContent='Percorso · '+path.cost+' PM';
-    }
+function restoreInterface(previous){
+  const stage=root.querySelector('.board-stage');
+  if(!stage)return;
+  stage.style.setProperty('--board-zoom',zoom);
+  stage.classList.toggle('zoomed',zoom>1);
+  stage.scrollLeft=previous.left;stage.scrollTop=previous.top;
+  const hand=root.querySelector('.hand'),cards=hand.querySelector('.cards');
+  cards.scrollLeft=previous.cards;
+  hand.classList.toggle('hand-open',handOpen);
+  const toggle=hand.querySelector('.hand-toggle');
+  if(toggle){
+    toggle.setAttribute('aria-expanded',String(handOpen));
+    toggle.textContent=handOpen?'Nascondi mano':'Mostra mano';
   }
-});
+  touchTarget=null;
+  root.querySelector('.touch-target')?.classList.remove('touch-target');
+  root.querySelector('[data-ui="confirm-cell"]').hidden=true;
+  const previousFocus=previous.focus;
+  const key=previousFocus?.dataset.focusKey;
+  const board=[...root.querySelectorAll(boardChoices)];
+  const same=key&&[...root.querySelectorAll('[data-focus-key]')].find(element=>element.dataset.focusKey===key);
+  root.querySelector('[data-ui-blocked]')?.setAttribute('aria-disabled','true');
+  board.forEach((element,i)=>element.tabIndex=board.includes(same)?(element===same?0:-1):(i===0?0:-1));
+  const turnStatus=document.querySelector('#turn');
+  if(pendingBoardFocus&&!root.inert&&board.length&&document.activeElement===turnStatus){
+    pendingBoardFocus=false;board[0].focus({preventScroll:true});
+  }
+  if(!previousFocus||root.inert||previousFocus.isConnected)return;
+  const fallback=previousFocus.closest('.board, .hand, .actions')?
+    board[0]??root.querySelector('.actions button:not([disabled]):not([aria-disabled="true"])'):null;
+  const target=same&&!same.disabled&&same.getAttribute('aria-disabled')!=='true'&&same.getClientRects().length?same:fallback;
+  pendingBoardFocus=Boolean(!target&&previousFocus.closest('.board, .hand, .actions'));
+  (target??turnStatus).focus({preventScroll:true});
+}
+function showRoute(cell){
+  root.querySelectorAll('.route-preview').forEach(node=>node.classList.remove('route-preview'));
+  const route=document.querySelector('#route-caption');
+  if(!route)return;
+  route.textContent='';
+  if(!cell?.dataset.route)return;
+  for(const index of cell.dataset.route.split(','))root.querySelector('[data-focus-key="cell-'+index+'"]')?.classList.add('route-preview');
+  route.textContent='Percorso · '+cell.dataset.cost+' PM'+(cell.classList.contains('ritual')?' · Zona Rituale':'');
+}
+root.addEventListener('pointerover',event=>{if(event.pointerType!=='touch'&&!touchTarget)showRoute(event.target.closest('.cell[data-route]'));});
 root.addEventListener('pointerout',event=>{
-  const card=event.target.closest('.card');
-  if(card&&!card.contains(event.relatedTarget))previewCard();
-  if(event.target.closest('.cell.legal')){
-    root.querySelectorAll('.route-preview').forEach(node=>node.classList.remove('route-preview'));
-    document.querySelector('#route-caption').textContent='';
-  }
+  const from=event.target.closest('.cell[data-route]');
+  if(from&&!from.contains(event.relatedTarget)&&!touchTarget)showRoute(document.activeElement?.closest('.cell[data-route]'));
 });
 root.addEventListener('focusin',event=>{
-  if(event.target.matches('.card'))previewCard(event.target);
+  if(touchTarget)return;
+  showRoute(event.target.closest('.cell[data-route]'));
+  if(event.target.dataset.uiBlocked)document.querySelector('#route-caption').textContent=event.target.title;
 });
-root.addEventListener('focusout',event=>{
-  if(event.target.matches('.card'))previewCard();
+root.addEventListener('focusout',event=>{if(!touchTarget&&event.target.matches('.cell[data-route]'))showRoute(null);});
+root.addEventListener('keydown',event=>{
+  const cancel=root.querySelector('[data-cancel-target]');
+  if(event.key==='Escape'&&(touchTarget||cancel)){
+    event.preventDefault();event.stopPropagation();detailReader.close();
+    if(touchTarget){restoreInterface(readInterface());showRoute(null);}
+    else cancel.click();
+    return;
+  }
+  if(!event.key.startsWith('Arrow')||!event.target.matches(boardChoices))return;
+  event.preventDefault();
+  const board=[...root.querySelectorAll(boardChoices)],current=board.indexOf(event.target);
+  const step=['ArrowLeft','ArrowUp'].includes(event.key)?-1:1;
+  let next=board[(current+step+board.length)%board.length];
+  if(event.target.matches('.cell')&&['ArrowUp','ArrowDown'].includes(event.key)){
+    const position=Number(event.target.dataset.focusKey.slice(5));
+    const rows=board.filter(element=>element.matches('.cell')).map(element=>[element,Number(element.dataset.focusKey.slice(5))])
+      .filter(([,cell])=>step*(xy(cell)[1]-xy(position)[1])>0);
+    rows.sort((a,b)=>distance(position,a[1])-distance(position,b[1]));
+    next=rows[0]?.[0]??next;
+  }
+  event.target.tabIndex=-1;next.tabIndex=0;next.focus();
 });
+function activate(button){
+  if(!button||button.disabled)return;
+  if(button.dataset.uiBlocked){document.querySelector('#route-caption').textContent=button.title;return;}
+  if(button.getAttribute('aria-disabled')==='true')return;
+  detailReader.close();showRoute(null);
+  if(matchMode==='online')onlineDriver?.act(Number(button.dataset.action));
+  else actions[Number(button.dataset.action)]?.();
+}
 root.addEventListener('click',event=>{
+  const command=event.target.closest('[data-ui]')?.dataset.ui;
+  if(command){
+    if(command==='confirm-cell'){activate(touchTarget);return;}
+    if(command==='training-next'){nextTraining();return;}
+    if(command==='training-restart'){start();return;}
+    if(command==='rematch'){start();return;}
+    if(command==='menu'){document.querySelector('#main-menu').click();return;}
+    if(command==='hand')handOpen=!handOpen;
+    const previous=readInterface();
+    if(command==='zoom-more')zoom=Math.min(3,zoom+.5);
+    if(command==='zoom-less')zoom=Math.max(1,zoom-.5);
+    if(command==='zoom-reset'){zoom=1;previous.left=0;previous.top=0;}
+    restoreInterface(previous);
+    return;
+  }
   if(event.target.closest('[data-time-open]')){
     document.querySelector('#online-bar').open=true;document.querySelector('#time-stop').focus();return;
   }
   const unit=event.target.closest('[data-inspect]');
   if(unit){inspected=Number(unit.dataset.inspect);return;}
   const b=event.target.closest('button[data-action]');
-  if(b?.matches('.card[aria-disabled="true"]')){previewCard(b);return;}
-  if(b?.matches('.discard-card .card')){previewCard(b);return;}
-  if(b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true'){
-    if(matchMode==='online'){onlineDriver?.act(Number(b.dataset.action));return;}
-    actions[Number(b.dataset.action)]?.();
+  if(b?.matches(boardChoices)&&(event.pointerType==='touch'||event.detail>0&&matchMedia('(pointer: coarse)').matches)){
+    touchTarget?.classList.remove('touch-target');
+    touchTarget=b;b.classList.add('touch-target');showRoute(b);
+    const confirm=root.querySelector('[data-ui="confirm-cell"]');
+    confirm.hidden=false;confirm.setAttribute('aria-label','Conferma '+b.getAttribute('aria-label'));
+    return;
   }
+  activate(b);
 });
 document.querySelector('#reset').onclick=()=>{if(matchMode!=='online'&&confirm('Iniziare una nuova partita?'))start();};
 const titleScreen=document.querySelector('#title-screen');
@@ -1543,6 +1756,28 @@ copyMatchLog.onclick=async()=>{
 };
 const startSolo=document.querySelector('#start-solo');
 const startSpectator=document.querySelector('#start-spectator');
+const startTraining=document.querySelector('#start-training');
+let trainingStep=0;
+const trainingLessons=[
+  ['Schieramento','Piazza Terra e Fulmine sui sigilli rossi. Leggi il nome della pedina prima di scegliere la casella.'],
+  ['Movimento','Porta Terra Rosso sul sigillo verde adiacente. Controlla il costo del percorso prima di muoverti.'],
+  ['Reazione avversaria','Leggi Folgore Abbagliante, poi scegli il bersaglio Blu. Osserva come Veto Arcano cambia l’esito.'],
+  ['Rituale','Terra Rosso inizia il turno su un sigillo libero da nemici adiacenti. Completa il Rituale.'],
+];
+function trainingPanel(){
+  const [title,hint]=trainingLessons[trainingStep];
+  const complete=[phase!=='setup',units[0].cell===12,
+    chronicle.turns.some(turn=>turn.entries.some(entry=>entry.cards.some(card=>card.id==='veto')))&&viewer===0,
+    phase==='end'&&winner===0][trainingStep];
+  return '<section class="training-panel"><h2>'+title+' · '+(trainingStep+1)+' / '+trainingLessons.length+'</h2><p>'+hint+'</p>'+
+    (complete?'<p role="status">'+(trainingStep===3?'Allenamento completato.':'Obiettivo completato.')+'</p><button type="button" data-ui="training-next">'+
+      (trainingStep===3?'Torna al menu':'Prossimo esercizio')+'</button>':'')+
+    '<button type="button" data-ui="training-restart">Ricomincia esercizio</button></section>';
+}
+function nextTraining(){
+  if(trainingStep===trainingLessons.length-1){document.querySelector('#main-menu').click();return;}
+  trainingStep++;start();document.querySelector('#turn').focus();
+}
 const setupForm=document.querySelector('#computer-setup');
 const titleMenu=document.querySelector('.title-menu');
 let selectedMatch='local';
@@ -1574,6 +1809,7 @@ function closeSetup(){
 }
 startSolo.onclick=()=>showSetup('solo');
 startSpectator.onclick=()=>showSetup('spectator');
+startTraining.onclick=()=>{trainingStep=0;openMatch('training',[null,'normal']);};
 document.querySelector('#cancel-setup').onclick=()=>{
   closeSetup();
   (selectedMatch==='solo'?startSolo:startSpectator).focus();
@@ -1607,7 +1843,7 @@ document.querySelector('#main-menu').onclick=()=>{
   document.body?.append(document.querySelector('#match-history'),document.querySelector('#action-caption'),document.querySelector('#route-caption'));
   root.replaceChildren();
   titleScreen.hidden=false;
-  (matchMode==='spectator'?startSpectator:startSolo).focus();
+  (matchMode==='spectator'?startSpectator:matchMode==='training'?startTraining:startSolo).focus();
 };
 
 const reducedMotion=document.querySelector('#reduce-motion');
@@ -1623,7 +1859,7 @@ document.querySelector('#match-history').addEventListener('click',event=>{
 if(typeof document.addEventListener==='function')detailReader=setupDetails();
 
 // The host retains the rules and private state. Only recipient-specific HTML leaves it.
-if(typeof document.createElement==='function')import('./online.mjs?v=5').then(({setupOnline})=>{
+if(typeof document.createElement==='function')import('./online.mjs?v=6').then(({setupOnline})=>{
   onlineDriver=setupOnline({
     waiting(){
       titleScreen.hidden=true;matchHeader.hidden=false;root.hidden=true;
@@ -1643,10 +1879,12 @@ if(typeof document.createElement==='function')import('./online.mjs?v=5').then(({
       onlineSide=side;render();
       if(side!==viewer)throw new Error('Attendi la tua decisione.');
       const b=root.querySelector('button[data-action="'+id+'"]');
-      if(!Number.isInteger(id)||!b||b.disabled||b.getAttribute('aria-disabled')==='true'||b.matches('.discard-card .card'))throw new Error('Mossa non disponibile.');
+      // Older journals can contain a Colpo Arcano selection without a target.
+      if(!Number.isInteger(id)||!b||b.disabled||b.getAttribute('aria-disabled')==='true'&&!b.dataset.uiBlocked||!actions[id])throw new Error('Mossa non disponibile.');
       actions[id]();
     },
     guest(view){
+      const previousUI=readInterface();
       matchMode='online';onlineSide=1;titleScreen.hidden=true;matchHeader.hidden=false;root.hidden=false;
       document.body.classList.add('match-active');detailReader.close();
       for(const id of ['match-history','action-caption','route-caption'])document.querySelector('#'+id)?.remove();
@@ -1654,13 +1892,19 @@ if(typeof document.createElement==='function')import('./online.mjs?v=5').then(({
       const tags=new Set(['DIV','SECTION','ASIDE','SPAN','BUTTON','P','H2','H3','STRONG','SMALL','OL','LI']);
       for(const node of template.content.querySelectorAll('*')){
         if(!tags.has(node.tagName)){node.remove();continue;}
-        for(const a of [...node.attributes])if(!['class','id','title','tabindex','disabled','type','data-action','data-detail','data-inspect','role'].includes(a.name)&&!a.name.startsWith('aria-')&&!(a.name==='style'&&/^(left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;transform:rotate\((0|90)deg\))$/.test(a.value)))node.removeAttribute(a.name);
+        for(const a of [...node.attributes])if(!['class','id','title','tabindex','disabled','hidden','type','data-action','data-detail','data-inspect','data-focus-key','data-route','data-cost','data-ui','data-ui-blocked','data-cancel-target','role'].includes(a.name)&&!a.name.startsWith('aria-')&&!(a.name==='style'&&/^(left:[\d.]+%;top:[\d.]+%;width:[\d.]+%;transform:rotate\((0|90)deg\))$/.test(a.value)))node.removeAttribute(a.name);
+        if(node.dataset.ui&&!['zoom-less','zoom-more','zoom-reset','confirm-cell','hand','menu'].includes(node.dataset.ui))delete node.dataset.ui;
       }
       root.replaceChildren(template.content);document.querySelector('#turn').textContent=view.turn;
+      restoreInterface(previousUI);
       updateTimeControl(view.timeControl);
       document.querySelector('#reset').hidden=true;copyMatchLog.hidden=true;
     },
-    lock(){root.inert=true;document.querySelector('#time-stop').disabled=true;},
-    unlock(){root.inert=false;document.querySelector('#time-stop').disabled=!timeControlAvailable&&document.querySelector('#time-stop').value==='off';},
+    lock(){if(!root.inert)lockedInterface=readInterface();root.inert=true;document.querySelector('#time-stop').disabled=true;},
+    unlock(){
+      root.inert=false;
+      if(lockedInterface){restoreInterface(lockedInterface);lockedInterface=null;}
+      document.querySelector('#time-stop').disabled=!timeControlAvailable&&document.querySelector('#time-stop').value==='off';
+    },
   });
 }).catch(error=>console.error('Online:',error));

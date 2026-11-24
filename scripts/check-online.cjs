@@ -35,11 +35,11 @@ const server=http.createServer((req,res)=>{
     for(let i=0;i<45;i++){
       const turn=await host.locator('#turn').textContent();const actor=turn.includes('Decide: Blu')?guest:host;
       await actor.waitForFunction(()=>!document.querySelector('#game').inert);
-      let button=actor.locator('.actions button').filter({hasText:/^(Passa|Mantieni gli Attacchi|Caricamento|Ricarica senza scartare|Continua)$/}).first();
+      let button=actor.locator('.actions button').filter({hasText:/^(Passa|Non reagire|Mantieni gli Attacchi|Fine Azione|Termina senza scartare|Continua)$/}).first();
       if(i%3===0&&await actor.locator('.cell.legal').count())button=actor.locator('.cell.legal').first();
-      if(i%4===0&&await actor.locator('.cards > .card:not([aria-disabled="true"])').count())button=actor.locator('.cards > .card:not([aria-disabled="true"])').first();
+      if(i%4===0&&await actor.locator('.cards .play-card:enabled').count())button=actor.locator('.cards .play-card:enabled').first();
       if(!await button.count())button=actor.locator('.cell.legal').first();
-      if(!await button.count())button=actor.locator('.actions button:not([disabled])').first();
+      if(!await button.count())button=actor.locator('.actions button[data-action]:not([disabled]):not([aria-disabled="true"])').first();
       if(!await button.count())button=actor.locator('#game button[data-action]:not([disabled]):not([aria-disabled="true"]):not(.discard-card .card)').first();
       assert(await button.count(),'a legal decision must be present');const n=await revision();assert.equal(n,i,'revision before decision '+i);const label=await button.textContent();await button.click();await waitRevision(n);
       assert.equal(await revision(),i+1,'saved decision '+i+' · '+label.slice(0,45));

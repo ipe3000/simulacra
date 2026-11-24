@@ -60,7 +60,8 @@ export function setupOnline(game){
   function recover(){
     if(!active||retryTimer)return;
     ready=false;game.lock();clearTimeout(connectTimer);
-    state('reconnecting','Collegamento interrotto. La partita è salvata; riconnessione automatica in corso…');
+    state('reconnecting',everConnected?'Collegamento interrotto. La partita è salvata; riconnessione automatica in corso…':
+      'Primo collegamento non riuscito. Nuovo tentativo automatico in corso…');
     const gen=generation,delay=Math.min(1000*2**retries++,8000);
     retryTimer=setTimeout(()=>{retryTimer=null;if(active&&gen===generation)guarded(restart)();},delay);
   }
@@ -126,7 +127,8 @@ export function setupOnline(game){
   }
   async function connect(){
     disconnect();const gen=generation;busy=false;bar.hidden=false;game.lock();
-    state(everConnected||retries?'reconnecting':'connecting',everConnected||retries?'Ripresa del collegamento in corso. La partita è salvata.':'Connessione in corso…');
+    state(everConnected||retries?'reconnecting':'connecting',everConnected?'Ripresa del collegamento in corso. La partita è salvata.':
+      retries?'Nuovo tentativo di collegamento…':'Connessione in corso…');
     await loadPeer();if(gen!==generation)return;
     const options={debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}};
     peer=record.role==='host'?new Peer('simulacra-v1-'+record.room,options):new Peer(options);

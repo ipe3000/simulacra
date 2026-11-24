@@ -17,11 +17,13 @@ export function createFeedback(root){
     const node=document.createElement('span');
     node.className='feedback '+kind+(side?' blue':'');
     node.textContent=label;
-    node.style.left=((cell%13+.5)/13*100)+'%';
+    const center=(cell%13+.5)/13*100;
     node.style.top=((Math.floor(cell/13)+.5)/6*100)+'%';
     const stack=stacks.get(cell)||0;stacks.set(cell,stack+1);
     node.style.marginTop=(-stack*22)+'px';
     board.append(node);
+    const half=Math.min(node.offsetWidth,board.clientWidth)/2;
+    node.style.left='clamp('+half+'px,'+center+'%,calc(100% - '+half+'px))';
     holdUntil=Date.now()+700*speed();
     animate(node,reduced()?[{opacity:1},{opacity:1,offset:.8},{opacity:0}]:
       [{opacity:0,transform:'translate(-50%,0) scale(.8)'},{opacity:1,offset:.15,transform:'translate(-50%,-70%) scale(1)'},

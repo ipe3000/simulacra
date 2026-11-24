@@ -9,12 +9,13 @@ export function setupDetails(){
   }
   function show(target,pin=false){
     const text=target?.dataset.detail;
-    if(!text||pinned&&!pin)return;
+    if(!text||target.isConnected===false||pinned&&!pin)return;
     source=target;pinned=pin;content.textContent=text;popup.hidden=false;
     popup.setAttribute('aria-label',text.split('\n')[0]);
     const rect=target.getBoundingClientRect?.()??{left:8,right:8,top:8,bottom:8};
     const gap=8;
-    const left=Math.max(8,Math.min(rect.left,innerWidth-popup.offsetWidth-8));
+    const card=target.classList?.contains('card');
+    const left=card&&innerWidth>=1100?innerWidth-popup.offsetWidth-12:Math.max(8,Math.min(rect.left,innerWidth-popup.offsetWidth-8));
     let top=rect.bottom+gap;
     if(top+popup.offsetHeight>innerHeight-8)top=rect.top-popup.offsetHeight-gap;
     popup.style.left=Math.max(8,Math.min(left,innerWidth-popup.offsetWidth-8))+'px';
@@ -46,7 +47,7 @@ export function setupDetails(){
   });
   document.addEventListener('click',event=>{
     const target=event.target.closest('[data-detail]');
-    if(target){clearTimeout(timer);show(target,true);}
+    if(target){clearTimeout(timer);show(target,true);if(!popup.hidden)document.querySelector('#close-detail').focus?.();}
     else if(!popup.contains(event.target))close();
   });
   document.querySelector('#close-detail').onclick=()=>{

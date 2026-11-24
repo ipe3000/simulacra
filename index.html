@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulacra · Nel Labirinto Antico</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&amp;display=swap">
-<link rel="stylesheet" href="./style.css?v=33">
+<link rel="stylesheet" href="./style.css?v=35">
 <main id="title-screen" aria-labelledby="game-title">
   <div class="title-brand">
     <div class="title-seal" aria-hidden="true">
@@ -30,6 +30,9 @@
     </button>
     <button id="start-spectator" type="button">
       <span>Computer vs Computer</span><span class="title-menu-aside" aria-hidden="true">→</span>
+    </button>
+    <button id="start-training" type="button">
+      <span>Allenamento guidato</span><span class="title-menu-aside" aria-hidden="true">→</span>
     </button>
   </nav>
   <section id="online-panel" class="title-setup" hidden aria-labelledby="online-title">
@@ -74,6 +77,7 @@
     <div id="turn" role="status" tabindex="-1"></div>
   </div>
   <div id="spectator-controls" hidden>
+    <span id="spectator-state" role="status"></span>
     <button id="toggle-computers" type="button">Avvia</button>
     <button id="step-computers" type="button">Avanza di una decisione</button>
     <label>Velocità
@@ -111,14 +115,14 @@
   </div></details>
 </header>
 <p id="online-notice" class="online-notice" role="status" hidden></p>
-<section id="action-caption" class="action-caption" aria-label="Ultima azione"></section>
+<section id="action-caption" class="action-caption" role="status" aria-label="Ultima azione"></section>
 <p id="route-caption" class="route-caption" role="status"></p>
 <textarea id="match-log-export" aria-label="Registro della partita da copiare" readonly rows="10" cols="75" hidden></textarea>
 <main id="game" hidden></main>
 <section id="match-history" class="match-history" aria-label="Cronologia della partita" hidden></section>
-<aside id="context-detail" class="context-detail" role="dialog" aria-label="Dettagli" hidden>
+<aside id="context-detail" class="context-detail" role="dialog" aria-label="Dettagli" aria-describedby="detail-content" hidden>
   <button id="close-detail" type="button" aria-label="Chiudi dettagli">Chiudi ×</button>
   <p id="detail-content"></p>
 </aside>
-<script type="module" src="./game.mjs?v=20"></script>
+<script type="module" src="./game.mjs?v=22"></script>
 </html>

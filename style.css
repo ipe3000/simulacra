@@ -474,6 +474,102 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
 .draw-choice>span{display:flex;flex-wrap:wrap;gap:6px}
 .draw-choice button{min-height:40px}
 @media(max-width:440px){.title-setup{padding:20px}.title-menu button{font-size:.9375rem}}
+
+/* Keep the current decision, its resources and the board in the same view. */
+.board-status{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;
+  padding:5px 9px;border:1px solid #697454;background:#29392e;color:#f3e5ca;font-size:13px;
+}
+.board-unit{min-width:0}.board-unit strong{color:#ffe0a3}
+.board-objective{color:#d9deb9;font-size:12px}
+.board-tools{display:flex;gap:4px;align-items:center}
+.board-tools button{padding:3px 8px;font-size:12px;min-width:30px;min-height:28px}
+.board-tools button[data-ui=confirm-cell]{background:#ffe0a3;color:#30271b;font-weight:700}
+.board-stage{overflow:auto;min-width:0;padding:2px;scrollbar-width:thin;touch-action:pan-x pan-y}
+.board-stage .board{width:calc(100% * var(--board-zoom,1));max-width:none;aspect-ratio:13/6;margin-inline:auto}
+.cell:focus-visible,.edge.target:focus-visible{outline:3px solid #2b1736;outline-offset:-4px}
+.cell.route-preview,.cell.route-preview.legal:hover{background:#f7d68d85;box-shadow:inset 0 0 0 3px #fff1bf}
+.touch-target,.touch-target:hover{outline:3px solid #3d1b4d;outline-offset:-3px;background:#fcdf9c8c!important}
+.reacted-cell .token{filter:drop-shadow(0 0 5px #783982);outline:2px solid #deb2f2;outline-offset:-2px}
+.affected-cell .token{outline:2px dashed #492654;outline-offset:-2px}
+.decision-dock{min-width:0}
+.decision-row .instruction{font-size:13px}
+.decision-row .actions{flex:0 1 auto}
+.ritual-hint{font-size:12px;line-height:1.35;color:#dfe7b9;padding:1px 0}
+.decision-row button[data-ui-blocked=true]{color:#d5ccb2;background:#27342a;border-color:#788264;cursor:default}
+.hand-card{display:flex;flex-direction:column;gap:4px;flex:1 0 112px;min-width:112px;max-width:220px}
+.hand-card .card{width:100%;min-width:0;min-height:61px;flex:1 0 auto}
+.hand-card .card.selected small{color:#382817}
+.hand-card>button:not(.card){font-size:11px;line-height:1.2;min-height:25px;padding:3px 5px}
+.card-status{display:block;margin-top:6px;padding:3px 5px;border:1px solid transparent;font-size:11px;line-height:1.25;font-weight:650;background:#292e27;color:#e0d9c7}
+.card.availability-available{border-color:#a3c98c}
+.availability-available .card-status,.availability-discardable .card-status{background:#314c31;color:#e4facf;border-color:#81a969}
+.availability-reaction-ready .card-status{background:#50375e;color:#fff0ff;border-color:#c5a3df}
+.availability-reaction-wait .card-status{background:#29384c;color:#d9e7fa;border-color:#6f87a8}
+.card.availability-unavailable{background:#272f29;border-style:dashed}
+.reaction-hand .card:not(.reaction-available){opacity:1}
+.hand-card.group-start{margin-inline-start:4px}
+.hand-toggle,.empty-hand:not(:has(.time-control-link)){display:none}
+.training-panel{display:grid;gap:6px;padding:10px;border:1px solid #a58f60;background:#27382b;font-size:13px;line-height:1.4}
+.training-panel h2{font-size:16px;color:#ffe0a3}
+.training-panel button{padding:5px 8px;text-align:left}
+.training-panel [data-ui=training-next]{background:#ffe0a3;color:#35231e;font-weight:700}
+.reaction-announcement #action-caption>button{color:#ecd6ff}
+
+@media(min-width:1100px) and (min-height:650px){
+  #game .play-area{grid-template-rows:auto 56px minmax(0,1fr) auto}
+  #action-caption{height:56px}
+  #action-caption>span{white-space:normal}
+  .board-stage{display:block;align-content:safe center}
+  .board-stage .board{width:calc(min(100cqw - 4px,216.6667cqh - 4px) * var(--board-zoom,1))}
+  .decision-dock{grid-template-rows:auto auto;overflow:visible}
+  .decision-row{max-height:70px}
+  .hand .cards{height:auto;min-height:0;align-items:stretch}
+  .hand-card{min-width:126px;flex-basis:126px}
+  .hand-card .card{min-width:0;min-height:65px}
+  .hand .card small{font-size:11px}
+  .roster .unit-summary{font-size:12px}
+  .panel:has(.training-panel){grid-template-rows:auto auto minmax(0,1fr)!important}
+}
+@media(max-width:900px){
+  #match-header{justify-content:flex-start;flex-wrap:wrap;gap:6px 10px}
+  #match-header>.match-turn{order:1;width:100%;min-width:0}
+  body.match-active #game{padding-top:6px}
+  .board-status{position:sticky;top:0;z-index:20;margin-bottom:5px}
+  .board-status .board-unit{flex:1 1 100%}
+  .board-tools button{min-height:40px;min-width:40px}
+  .board-stage.zoomed{height:clamp(145px,50dvh,480px)}
+  .action-caption{margin-block:5px;min-height:0;padding:6px 10px!important}
+  .decision-row .actions{flex-wrap:wrap}
+  .decision-row button{min-height:40px;padding:5px 9px}
+  #game .panel{grid-template-columns:minmax(0,1fr)}
+  #game .roster{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #game .match-history{min-width:0}
+  .training-panel{grid-column:1/-1}
+  .layout:has(.training-panel) .panel{display:contents}
+  .layout:has(.training-panel) .training-panel{grid-row:1}
+}
+@media(max-width:600px),(min-width:700px) and (max-height:520px){
+  .hand-toggle{display:inline-block;min-height:38px;margin-right:7px}
+  .hand h3{display:inline}
+  .hand:not(.hand-open):not(.required-hand) .cards{display:none}
+  .hand.required-hand .hand-toggle{display:none}
+  .hand .cards{overscroll-behavior-inline:contain}
+  .hand-card>button:not(.card){min-height:36px}
+  .time-control-link{float:none;max-width:100%;white-space:normal}
+  body:has(#online-bar:not([hidden])) .match-turn{order:0}
+}
+@media(min-width:700px) and (max-height:520px){
+  #match-header h1{font-size:20px}
+  #match-header>.match-turn{order:0;width:auto;flex:1}
+  #match-header #turn{font-size:13px}
+  .play-area{display:grid;grid-template-columns:minmax(0,1fr) minmax(212px,30%);gap:5px 9px;align-items:start}
+  .board-status,#announcement-slot{grid-column:1/-1}
+  .board-status .board-unit{flex:0 1 auto}
+  .action-caption{margin:0}
+  .action-caption>strong,.announcement-title{font-size:17px}
+  .board-stage{grid-column:1}.decision-dock{grid-column:2}
+}
 #title-screen:has(.title-setup:not([hidden])){padding-block:24px}
 #title-screen:has(.title-setup:not([hidden])) .title-brand{padding-top:0}
 #title-screen:has(.title-setup:not([hidden])) .title-seal{width:64px;margin-bottom:10px}
