@@ -393,7 +393,24 @@ function inRange(u,v,category,ignored){
   return !has(u,'Accecato')&&(!v.conditions||!has(v,'Invisibile'))&&spellSight(u,v.cell,ignored);
 }
 function bouncedSight(u,v){
-  return spellSight(u,v.cell)||cells.some(c=>spellSight(u,c)&&sight(c,center(v.cell),u.side));
+  const target=center(v.cell);
+  if(spellSight(u,v.cell))return true;
+  const [startX,startY]=xy(spellOrigin(u));
+  const [targetX,targetY]=xy(v.cell);
+  return cells.some(c=>{
+    if(!spellSight(u,c))return false;
+    if(sight(c,target,u.side))return true;
+    const [turnX,turnY]=xy(c);
+    // A U-turn crosses into the adjacent lane and reverses direction.
+    return neighbors(c).some(exit=>{
+      const [exitX,exitY]=xy(exit);
+      const vertical=turnX===startX&&exitX===targetX&&exitY===turnY&&
+        (turnY-startY)*(turnY-targetY)>0;
+      const horizontal=turnY===startY&&exitY===targetY&&exitX===turnX&&
+        (turnX-startX)*(turnX-targetX)>0;
+      return (vertical||horizontal)&&sight(c,center(exit),u.side)&&sight(exit,target,u.side);
+    });
+  });
 }
 function chargeDestinations(u,v){
   if(has(u,'Accecato')||(u.projection&&has(v,'Invisibile'))||!spellSight(u,v.cell))return [];

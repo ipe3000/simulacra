@@ -149,7 +149,7 @@
     "tipo": "Attacco",
     "costo": 3,
     "gittata": "Vista",
-    "effetto": "2 danni. Per questo incantesimo la LdV può curvare una volta di 90° o di 180°.",
+    "effetto": "2 danni. La linea di vista può fare una svolta di 90° oppure un’inversione a U di 180° passando nella fila o colonna adiacente. Tutti i tratti devono essere liberi.",
     "copiePerArcimago": 1
   },
   {

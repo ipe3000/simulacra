@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {gameHarness} from './helpers/game-harness.mjs';
 
+test('Sfera Rimbalzante can make a U-turn through an adjacent lane',()=>{
+  const game=gameHarness();
+  game.run(`units[0].cell=60;units[1].cell=59;teams[0].hand=['bounce'];`);
+  assert.equal(game.run("legalCells('bounce').includes(59)"),true);
+  game.run('barriers[1]=[8,2,8,3];');
+  assert.equal(game.run("legalCells('bounce').includes(59)"),false);
+});
+
 test('animated casting waits before damage and before offering Veto',()=>{
   const game=gameHarness();
   game.run(`feedback.enabled=()=>true;feedback.reduced=()=>false;feedback.speed=()=>1;
