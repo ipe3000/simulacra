@@ -111,3 +111,16 @@ test('Ribaltamento Karmico still draws two cards for the first Arcimago',()=>{
   assert.equal(game.run('active().hp'),8);
   assert.equal(game.run('nextFirst'),null);
 });
+
+test('Visione Oracolare offers choices only for cards actually drawn',()=>{
+  const game=gameHarness();
+  game.run(`teams[0].hand=['oracle'];teams[0].deck=['stride'];teams[0].discard=[];
+    borrowed=[{id:'oracle',holder:0,owner:1}];
+    active().pe=4;pick('oracle');`);
+  assert.deepEqual(game.snapshot('choice.options'),[0]);
+  assert.match(game.run('choice.text'),/una carta/);
+  game.run("cardChoice(0,'fondo')");
+  assert.deepEqual(game.snapshot('teams[0].deck'),['stride']);
+  assert.deepEqual(game.snapshot('teams[0].hand'),[]);
+  assert.equal(game.run('phase'),'action');
+});

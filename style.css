@@ -470,6 +470,9 @@ body:not(.match-active)>#action-caption,body:not(.match-active)>#route-caption{d
 }
 .computer-setup.title-setup{gap:20px}
 .computer-setup.title-setup select{min-height:44px;max-width:100%;font-size:.9375rem}
+.draw-choice{display:grid;gap:6px;padding:8px;border:1px solid #677152;background:#263329}
+.draw-choice>span{display:flex;flex-wrap:wrap;gap:6px}
+.draw-choice button{min-height:40px}
 @media(max-width:440px){.title-setup{padding:20px}.title-menu button{font-size:.9375rem}}
 #title-screen:has(.title-setup:not([hidden])){padding-block:24px}
 #title-screen:has(.title-setup:not([hidden])) .title-brand{padding-top:0}

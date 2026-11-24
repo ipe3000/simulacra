@@ -977,6 +977,13 @@ function pick(id){
     choice={id,options};
     if(id==='oracle'){
       for(let count=0;count<3;count++)if(draw(u.side))options.push(t.hand.length-1);
+      choice.text=options.length===3
+        ?'Scegli una carta da rimettere in cima o in fondo al mazzo.'
+        :options.length===1
+          ?'Hai pescato una carta: scegli se rimetterla in cima o in fondo al mazzo.'
+          :options.length===2
+            ?'Hai pescato due carte: scegli quale rimettere in cima o in fondo al mazzo.'
+            :'Non ci sono carte da pescare.';
     }
     phase='choice';mode='move';render();return;
   }
@@ -1385,7 +1392,7 @@ function render(){
   if(visible&&phase==='selection')controls=choice.options.map(([label,fn])=>button(label,fn)).join('');
   if(visible&&phase==='choice'){
     controls=choice.options.map(option=>{
-      if(choice.id==='oracle')return ['cima','fondo'].map(where=>button(cards[t.hand[option]][0]+' · '+where,()=>cardChoice(option,where))).join('');
+      if(choice.id==='oracle')return '<div class="draw-choice"><strong>'+cards[t.hand[option]][0]+'</strong><span>'+['cima','fondo'].map(where=>button('Rimetti in '+where,()=>cardChoice(option,where))).join('')+'</span></div>';
       const label=choice.id==='illumination'?cards[option][0]:choice.id==='radiance'?name(option):option;
       return button(label,()=>cardChoice(option));
     }).join('');
